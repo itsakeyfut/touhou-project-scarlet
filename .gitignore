@@ -1,0 +1,11 @@
+/target
+Cargo.lock
+
+.claude/settings.local.json
+
+save/
+SESSION.md
+
+## Ignore other game project for reference
+docs/references/suika-game/
+docs/references/vampire-survivors/
