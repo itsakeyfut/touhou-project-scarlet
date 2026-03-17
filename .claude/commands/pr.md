@@ -76,7 +76,7 @@ Complete the implementation workflow:
    **Commit guidelines:**
    - Create logical, atomic commits
    - Follow conventional commits format: `<type>(<scope>): <description>`
-   - Reference issue numbers with "Closes #XXX"
+   - Reference issue numbers with "Closes #XXX" (one per line if multiple)
    - Write commit message in English
    - Example: `feat(danmaku): implement BulletGlowMaterial for bullet glow effect\n\nCloses #5`
 
@@ -138,6 +138,10 @@ Complete the implementation workflow:
 ## 関連 Issue
 
 Closes #XXX
+
+<!-- 複数 Issue を閉じる場合は1行ずつ記述すること -->
+<!-- Closes #20 -->
+<!-- Closes #21 -->
 
 ## テスト計画
 
