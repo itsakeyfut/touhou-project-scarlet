@@ -2,7 +2,7 @@
 # justfile - Daily development workflow
 # =============================================================================
 #
-# Vampire Survivors Clone - Bevy Game Development Workflow
+# 東方紅魔郷 〜 the Embodiment of Scarlet Devil - Bevy Game Development Workflow
 #
 # =============================================================================
 
@@ -16,27 +16,23 @@ new:
 build:
     cargo build --workspace
 
-# Build game in debug mode (faster compile, more logging)
-dev-build:
-    cargo build -p vs
-
-# Build game in release mode (optimized, minimal logging)
-release-build:
-    cargo build -p vs --release
+# Build game in release mode (optimized)
+build-release:
+    cargo build -p touhou-project-scarlet --release
 
 # === Run Commands ===
 
 # Run game (default)
 run:
-    cargo run -p vs
+    cargo run -p touhou-project-scarlet
 
 # Run game in debug mode with debug logging
 dev:
-    RUST_LOG=debug,wgpu=warn,wgpu_hal=warn,naga=warn cargo run -p vs
+    RUST_LOG=debug,wgpu=warn,wgpu_hal=warn,naga=warn cargo run -p touhou-project-scarlet
 
 # Run game in release mode
 release:
-    cargo run -p vs --release
+    cargo run -p touhou-project-scarlet --release
 
 # === Code Quality ===
 
@@ -60,9 +56,9 @@ test:
 
 # Run unit tests: all crates / specific crate / specific test in crate
 # Examples:
-#   just unit-test                    # All unit tests
-#   just unit-test vs-core            # All unit tests in vs-core
-#   just unit-test vs-core test_collision  # Specific test
+#   just unit-test                              # All unit tests
+#   just unit-test scarlet-core                 # All unit tests in scarlet-core
+#   just unit-test scarlet-core test_collision  # Specific test
 unit-test crate="" test="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -76,9 +72,9 @@ unit-test crate="" test="":
 
 # Run integration tests: all crates / specific crate / specific test in crate
 # Examples:
-#   just integration-test                    # All integration tests
-#   just integration-test vs-core            # All integration tests in vs-core
-#   just integration-test vs-core test_xp   # Specific test
+#   just integration-test                       # All integration tests
+#   just integration-test scarlet-core          # All integration tests in scarlet-core
+#   just integration-test scarlet-core test_xp  # Specific test
 integration-test crate="" test="":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -94,10 +90,10 @@ integration-test crate="" test="":
 test-seq:
     cargo test --workspace -- --test-threads=1
 
-# Run criterion benchmarks for vs-core (spatial grid performance)
+# Run criterion benchmarks for scarlet-core (spatial grid performance)
 # HTML reports are written to target/criterion/
 bench:
-    cargo bench -p vs-core
+    cargo bench -p scarlet-core
 
 # === Clean ===
 
