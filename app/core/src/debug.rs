@@ -1,6 +1,17 @@
 use bevy::prelude::*;
 
-use crate::constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
+use crate::{
+    AppState,
+    constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH},
+};
+
+/// Immediately transitions to [`AppState::Playing`] on startup.
+///
+/// Skips the title / character-select flow so developers can test gameplay
+/// without implementing UI screens first. Only active with `debug-hitbox`.
+pub fn debug_skip_to_playing(mut next_state: ResMut<NextState<AppState>>) {
+    next_state.set(AppState::Playing);
+}
 
 /// Draws the play-area boundary and center cross using Bevy Gizmos.
 ///
