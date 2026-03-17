@@ -22,9 +22,6 @@ impl Plugin for ScarletCorePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>();
 
-        // TODO(phase-02, issue-15): move camera setup to scarlet-ui::camera
-        app.add_systems(Startup, setup_camera);
-
         // System set ordering — all sets run only while Playing.
         app.configure_sets(
             Update,
@@ -54,9 +51,4 @@ impl Plugin for ScarletCorePlugin {
         app.add_systems(Startup, debug::debug_skip_to_playing)
             .add_systems(Update, debug::debug_play_area_system);
     }
-}
-
-/// Temporary camera setup — will be moved to `scarlet-ui` in Phase 02.
-fn setup_camera(mut commands: Commands) {
-    commands.spawn(Camera2d);
 }
