@@ -112,13 +112,8 @@ Complete the implementation workflow:
 **MANDATORY PR Body Limit: MAXIMUM 100 LINES**
 
 - **Keep PR body concise** - MUST be under 100 lines
-- Use clear, concise language in Japanese
-- Include only essential information:
-  - 概要 (Brief summary: 2-4 sentences)
-  - 変更内容 (Key changes: 3-5 bullet points)
-  - テスト (Test plan: brief checklist)
-  - 関連Issue (Related issues: "Closes #XXX")
-- Avoid verbose descriptions, excessive formatting, or redundant information
+- Follow the structure defined in `.github/PULL_REQUEST_TEMPLATE.md`
+- Avoid verbose descriptions or redundant information
 - If more details are needed, add them as issue comments instead
 
 **PR Title:**
@@ -128,22 +123,27 @@ Complete the implementation workflow:
 - Example: `fix(collision): グレイズ判定のバグ修正`
 - Example: `docs: WGSLシェーダー設計書を追加`
 
-**PR Body Template (in Japanese):**
+**PR Body Template** (from `.github/PULL_REQUEST_TEMPLATE.md`):
 ```markdown
 ## 概要
-[2-4 sentences describing the change]
+
+[このPRが何をするのか・なぜ変更するのかを1〜4文で記述]
 
 ## 変更内容
-- [Key change 1]
-- [Key change 2]
-- [Key change 3]
 
-## テスト
-- [ ] ユニットテスト追加/更新
-- [ ] ゲーム内で動作確認
-- [ ] `just check` 実行済み
+- [変更点1]
+- [変更点2]
+- [変更点3]
+
+## 関連 Issue
 
 Closes #XXX
+
+## テスト計画
+
+- [ ] `cargo test --workspace` 通過
+- [ ] `cargo clippy --workspace -- -D warnings` 通過
+- [ ] `cargo fmt --all -- --check` 通過
 ```
 
 Please proceed with these steps.
