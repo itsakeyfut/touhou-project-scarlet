@@ -3,13 +3,20 @@ use bevy::prelude::*;
 pub mod components;
 pub mod constants;
 pub mod debug;
+pub mod events;
 pub mod game_set;
+pub mod resources;
 pub mod states;
 pub mod systems;
 
-pub use components::{InvincibilityTimer, Player, PlayerStats};
+pub use components::{
+    BulletVelocity, DespawnOutOfBounds, InvincibilityTimer, Player, PlayerBullet, PlayerStats,
+    ShootTimer,
+};
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
+pub use events::ShootEvent;
 pub use game_set::GameSystemSet;
+pub use resources::GameData;
 pub use states::AppState;
 
 /// Core game plugin.
@@ -21,6 +28,12 @@ pub struct ScarletCorePlugin;
 impl Plugin for ScarletCorePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<AppState>();
+
+        // Events.
+        app.add_message::<ShootEvent>();
+
+        // Resources — inserted with game-start values.
+        app.insert_resource(GameData::new_game());
 
         // System set ordering — all sets run only while Playing.
         app.configure_sets(
@@ -44,8 +57,26 @@ impl Plugin for ScarletCorePlugin {
         app.add_systems(OnEnter(AppState::Playing), systems::player::spawn_player)
             .add_systems(
                 Update,
-                systems::player::player_movement_system.in_set(GameSystemSet::Input),
+                (
+                    systems::player::player_movement_system,
+                    systems::player::shoot_input_system,
+                )
+                    .in_set(GameSystemSet::Input),
             );
+
+        // Bullet systems.
+        app.add_systems(
+            Update,
+            systems::bullet::bullet_spawn_system.in_set(GameSystemSet::BulletEmit),
+        )
+        .add_systems(
+            Update,
+            systems::bullet::bullet_movement_system.in_set(GameSystemSet::Movement),
+        )
+        .add_systems(
+            Update,
+            systems::bullet::despawn_out_of_bounds_system.in_set(GameSystemSet::Cleanup),
+        );
 
         #[cfg(feature = "debug-hitbox")]
         app.add_systems(Startup, debug::debug_skip_to_playing)
