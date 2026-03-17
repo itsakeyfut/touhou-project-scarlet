@@ -100,6 +100,6 @@ pub struct SpellCardRecord {
 
 ## 参照
 
-- `docs/specification.md` § 13.1 スペルプラクティス
-- `docs/specification.md` § 13.2 リプレイシステム
+- `docs/01_specification.md` § 13.1 スペルプラクティス
+- `docs/01_specification.md` § 13.2 リプレイシステム
 - `docs/09_quick_reference.md` § AppState 遷移

@@ -71,5 +71,5 @@ pub fn is_phantasm_unlocked(progress: &ProgressData) -> bool {
 
 ## 参照
 
-- `docs/specification.md` § 7.2 Phantasm ステージ
-- `docs/specification.md` § 12.3 Phantasm ステージ仕様
+- `docs/01_specification.md` § 7.2 Phantasm ステージ
+- `docs/01_specification.md` § 12.3 Phantasm ステージ仕様

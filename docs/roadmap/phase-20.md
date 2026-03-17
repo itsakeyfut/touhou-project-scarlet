@@ -92,6 +92,6 @@ pub fn sakuya_shot_type_b_params() -> ShotParams {
 
 ## 参照
 
-- `docs/specification.md` § 5.4 咲夜（プレイアブル）
+- `docs/01_specification.md` § 5.4 咲夜（プレイアブル）
 - `docs/10_shaders_wgsl.md` § bomb_sakuya
 - `app/core/src/systems/boss/bosses/sakuya.rs` — ボス版咲夜とは独立した実装

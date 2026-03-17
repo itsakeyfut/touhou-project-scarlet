@@ -253,5 +253,5 @@ cargo run -p touhou-project-scarlet --release
 
 ## 参照
 
-- `docs/specification.md` § Stage 1 / ルーミア
+- `docs/01_specification.md` § Stage 1 / ルーミア
 - `docs/03_danmaku_systems.md` § 5 (ボスシステム)

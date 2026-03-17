@@ -253,5 +253,5 @@ pub fn spawn_boss_for_stage(
 
 ## 参照
 
-- `docs/specification.md` § Stage 2, Stage 3
+- `docs/01_specification.md` § Stage 2, Stage 3
 - `docs/03_danmaku_systems.md` § 5 (ボスシステム)

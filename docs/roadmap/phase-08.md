@@ -336,5 +336,5 @@ impl BossType {
 ## 参照
 
 - `docs/03_danmaku_systems.md` § 5 (ボスシステム)
-- `docs/specification.md` § ルーミアのスペルカード一覧
+- `docs/01_specification.md` § ルーミアのスペルカード一覧
 - `docs/10_shaders_wgsl.md` § 7 (スペルカード背景), § 6 (被弾フラッシュ)

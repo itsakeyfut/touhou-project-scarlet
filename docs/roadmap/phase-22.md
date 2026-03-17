@@ -125,6 +125,6 @@ pub fn resolve_bgm_track(track: BgmTrack, mode: BgmMode) -> &'static str {
 
 ## 参照
 
-- `docs/specification.md` § 13.3 スペルカードコレクション
-- `docs/specification.md` § 13.4 ミュージックルーム
-- `docs/specification.md` § 13.5 実績システム
+- `docs/01_specification.md` § 13.3 スペルカードコレクション
+- `docs/01_specification.md` § 13.4 ミュージックルーム
+- `docs/01_specification.md` § 13.5 実績システム

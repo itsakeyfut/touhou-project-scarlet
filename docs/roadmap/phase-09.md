@@ -302,5 +302,5 @@ pub fn spawn_reimu_bomb_effect(
 ## 参照
 
 - `docs/03_danmaku_systems.md` § 4 (ボムシステム)
-- `docs/specification.md` § パワーシステム・ボムシステム
+- `docs/01_specification.md` § パワーシステム・ボムシステム
 - `docs/10_shaders_wgsl.md` § 8 (ボム演出シェーダー)

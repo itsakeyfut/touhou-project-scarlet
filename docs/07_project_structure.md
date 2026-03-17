@@ -148,7 +148,7 @@ touhou-project-scarlet/
 │           └── main.rs           # App 組み立て・Plugin 登録
 │
 ├── docs/                         # ドキュメント
-│   ├── specification.md          # ゲーム仕様書
+│   ├── 01_specification.md          # ゲーム仕様書
 │   ├── 02_architecture.md        # Bevy ECSアーキテクチャ
 │   ├── 03_danmaku_systems.md     # 弾幕システム詳細
 │   ├── 04_ui_ux.md              # UI/UXデザイン

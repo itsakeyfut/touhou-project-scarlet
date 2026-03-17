@@ -116,6 +116,6 @@ fn init_steam() -> Option<steamworks::Client> {
 
 ## 参照
 
-- `docs/specification.md` § 17 入力・コントローラー
-- `docs/specification.md` § 19 プラットフォーム・配信
-- `docs/specification.md` § 15.1 ダイアログシステム（言語設定）
+- `docs/01_specification.md` § 17 入力・コントローラー
+- `docs/01_specification.md` § 19 プラットフォーム・配信
+- `docs/01_specification.md` § 15.1 ダイアログシステム（言語設定）

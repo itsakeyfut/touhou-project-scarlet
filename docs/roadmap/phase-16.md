@@ -212,5 +212,5 @@ pub fn load_hiscore(mut game_data: ResMut<GameData>) {
 
 ## 参照
 
-- `docs/specification.md` § Stage 6 / レミリア
+- `docs/01_specification.md` § Stage 6 / レミリア
 - `docs/references/vampire-survivors/app/core/src/persistence.rs` — save/load JSON パターン

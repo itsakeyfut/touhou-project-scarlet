@@ -226,4 +226,4 @@ pub fn setup_extra_ending(mut commands: Commands) {
 
 ## 参照
 
-- `docs/specification.md` § Extraステージ / フランドール
+- `docs/01_specification.md` § Extraステージ / フランドール

@@ -251,5 +251,5 @@ pub fn sakuya_phases(difficulty: Difficulty) -> Vec<BossPhaseData> {
 
 ## 参照
 
-- `docs/specification.md` § Stage 4, Stage 5
+- `docs/01_specification.md` § Stage 4, Stage 5
 - `docs/03_danmaku_systems.md` § 弾幕パターン

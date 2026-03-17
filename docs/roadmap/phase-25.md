@@ -100,6 +100,6 @@ Phantasm: プロジェクト最高難易度、完全習熟者向け
 
 ## 参照
 
-- `docs/specification.md` — 全仕様の最終確認
+- `docs/01_specification.md` — 全仕様の最終確認
 - `docs/09_quick_reference.md` — パフォーマンスチェックポイント
 - `docs/roadmap/README.md` — マイルストーン M7
