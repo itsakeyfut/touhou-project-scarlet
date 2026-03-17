@@ -1,0 +1,19 @@
+[package]
+name = "touhou-project-scarlet"
+version.workspace = true 
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "touhou-project-scarlet"
+path = "src/main.rs"
+
+[dependencies]
+bevy = { workspace = true }
+scarlet-core = { path = "../core" }
+scarlet-ui = { path = "../ui" }
+scarlet-audio = { path = "../audio" }
+scarlet-assets = { path = "../assets" }

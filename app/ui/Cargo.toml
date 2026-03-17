@@ -1,0 +1,13 @@
+[package]
+name = "scarlet-ui"
+version.workspace = true 
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+bevy = { workspace = true }
+scarlet-core = { path = "../core" }
+scarlet-assets = { path = "../assets" }
