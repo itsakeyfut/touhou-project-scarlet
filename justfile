@@ -26,9 +26,9 @@ build-release:
 run:
     cargo run -p touhou-project-scarlet
 
-# Run game in debug mode with debug logging
+# Run game in debug mode with debug logging + hitbox/play-area visualization
 dev:
-    RUST_LOG=debug,wgpu=warn,wgpu_hal=warn,naga=warn cargo run -p touhou-project-scarlet
+    RUST_LOG=debug,wgpu=warn,wgpu_hal=warn,naga=warn cargo run -p touhou-project-scarlet --features scarlet-core/debug-hitbox
 
 # Run game in release mode
 release:
