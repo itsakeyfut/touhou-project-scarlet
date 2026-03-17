@@ -1,6 +1,9 @@
 use bevy::prelude::*;
 
-use crate::components::bullet::{BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind};
+use crate::{
+    components::bullet::{BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind},
+    shaders::BulletGlowMaterial,
+};
 
 // ---------------------------------------------------------------------------
 // Public emit helpers (called by emitter systems)
@@ -9,6 +12,8 @@ use crate::components::bullet::{BulletVelocity, DespawnOutOfBounds, EnemyBullet,
 /// Fires `count` bullets equally spaced around a full 360° circle.
 pub fn emit_ring(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<BulletGlowMaterial>,
     origin: Vec2,
     count: u8,
     speed: f32,
@@ -18,7 +23,7 @@ pub fn emit_ring(
     for i in 0..count {
         let angle = (step * i as f32).to_radians();
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
     }
 }
 
@@ -26,8 +31,11 @@ pub fn emit_ring(
 ///
 /// When `count` is 1 the single bullet points directly at the player.
 /// When `spread_deg` is 0 all bullets travel in the same direction.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_aimed(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<BulletGlowMaterial>,
     origin: Vec2,
     player_pos: Vec2,
     count: u8,
@@ -47,13 +55,16 @@ pub fn emit_aimed(
     for i in 0..count {
         let angle = base_angle - half + step * i as f32;
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
     }
 }
 
 /// Fires `count` bullets in a fixed fan at `angle_offset` degrees from straight down.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_spread(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<BulletGlowMaterial>,
     origin: Vec2,
     count: u8,
     spread_deg: f32,
@@ -73,7 +84,7 @@ pub fn emit_spread(
         let angle = (-spread_deg / 2.0 + step * i as f32 + angle_offset).to_radians()
             - std::f32::consts::FRAC_PI_2;
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
     }
 }
 
@@ -81,8 +92,11 @@ pub fn emit_spread(
 ///
 /// Called every frame by the spiral emitter system; the angle is advanced
 /// externally by [`super::emitter::SpiralState`].
+#[allow(clippy::too_many_arguments)]
 pub fn emit_spiral_frame(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<BulletGlowMaterial>,
     origin: Vec2,
     arms: u8,
     speed: f32,
@@ -93,7 +107,7 @@ pub fn emit_spiral_frame(
     for arm in 0..arms {
         let angle = (current_angle + arm_gap * arm as f32).to_radians();
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
     }
 }
 
@@ -103,20 +117,22 @@ pub fn emit_spiral_frame(
 
 pub(super) fn spawn_enemy_bullet(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<BulletGlowMaterial>,
     origin: Vec2,
     velocity: Vec2,
     kind: EnemyBulletKind,
 ) {
+    let radius = kind.collision_radius();
+    let color = LinearRgba::from(kind.color());
+    let mesh = meshes.add(Circle::new(radius));
+    let mat = materials.add(BulletGlowMaterial { color, ..default() });
     commands.spawn((
         EnemyBullet { damage: 1 },
         kind,
         BulletVelocity(velocity),
-        Sprite {
-            color: kind.color(),
-            custom_size: Some(kind.sprite_size()),
-            ..default()
-        },
-        // TODO(phase-04, #30): replace Sprite with Mesh2d + BulletGlowMaterial
+        Mesh2d(mesh),
+        MeshMaterial2d(mat),
         Transform::from_translation(origin.extend(1.5)),
         DespawnOutOfBounds,
     ));
