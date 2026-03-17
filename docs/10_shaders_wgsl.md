@@ -65,17 +65,19 @@ use bevy::{
 };
 
 /// 弾グロー素材
+///
+/// Phase 04: 手続き的な光る円（テクスチャなし）
+/// Phase 19: texture フィールドを追加しスプライトシートに差し替え予定
 #[derive(Asset, TypePath, AsBindGroup, Clone)]
 pub struct BulletGlowMaterial {
     #[uniform(0)]
-    pub color: LinearRgba,
+    pub color: LinearRgba,       // 発光色（HDR: 値 > 1.0 でブルーム発生）
     #[uniform(0)]
-    pub glow_intensity: f32,
+    pub glow_intensity: f32,     // 発光強度倍率（デフォルト 1.5）
     #[uniform(0)]
-    pub time: f32,
-    #[texture(1)]
-    #[sampler(2)]
-    pub texture: Handle<Image>,
+    pub time: f32,               // パルスアニメーション用経過時間
+    #[uniform(0)]
+    pub _padding: f32,
 }
 
 impl Material2d for BulletGlowMaterial {
@@ -98,19 +100,19 @@ pub struct ScarletShadersPlugin;
 
 impl Plugin for ScarletShadersPlugin {
     fn build(&self, app: &mut App) {
+        // Phase 04
         app
             .add_plugins(Material2dPlugin::<BulletGlowMaterial>::default())
-            .add_plugins(Material2dPlugin::<GrazeMaterial>::default())
-            .add_plugins(Material2dPlugin::<HitFlashMaterial>::default())
-            .add_plugins(Material2dPlugin::<SpellCardBgMaterial>::default())
-            .add_plugins(Material2dPlugin::<BombReimuMaterial>::default())
-            .add_plugins(Material2dPlugin::<BombMarisaMaterial>::default())
-            .add_plugins(Material2dPlugin::<PixelOutlineMaterial>::default())
+            .add_plugins(Material2dPlugin::<BulletTrailMaterial>::default())
             .add_systems(Update, (
                 update_bullet_glow_time,
-                update_graze_material_time,
-                update_spell_card_bg_time,
+                update_bullet_trail_time,
             ).run_if(in_state(AppState::Playing)));
+
+        // TODO(phase-05): GrazeMaterial
+        // TODO(phase-08): SpellCardBgMaterial, HitFlashMaterial
+        // TODO(phase-09): BombReimuMaterial, BombMarisaMaterial
+        // TODO(phase-12): PixelOutlineMaterial
     }
 }
 ```
@@ -123,11 +125,13 @@ impl Plugin for ScarletShadersPlugin {
 
 ### 3.1 WGSL (`shaders/bullet_glow.wgsl`)
 
+手続き的な光る円。テクスチャなし。Phase 19 でスプライトシートに差し替え予定。
+
 ```wgsl
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
 
 struct BulletGlowMaterial {
-    color: vec4<f32>,
+    color: vec4<f32>,        // LinearRgba — HDR で値 > 1.0 にするとブルーム発生
     glow_intensity: f32,
     time: f32,
     _padding: vec2<f32>,
@@ -135,16 +139,10 @@ struct BulletGlowMaterial {
 
 @group(2) @binding(0)
 var<uniform> material: BulletGlowMaterial;
-@group(2) @binding(1)
-var base_texture: texture_2d<f32>;
-@group(2) @binding(2)
-var base_sampler: sampler;
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    let tex_color = textureSample(base_texture, base_sampler, in.uv);
-
-    // スプライトの中心からの距離でグロー強度を計算
+    // UV 中心からの距離でグロー強度を計算
     let center = vec2<f32>(0.5, 0.5);
     let dist = distance(in.uv, center);
 
@@ -152,14 +150,10 @@ fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
     let pulse = 1.0 + 0.2 * sin(material.time * 6.0);
     let glow = material.glow_intensity * pulse * max(0.0, 1.0 - dist * 2.0);
 
-    // 元テクスチャ色 + グロー
-    let glow_color = material.color * glow;
+    // 円形マスク（dist > 0.5 は透明）
+    let alpha = max(0.0, 1.0 - dist * 2.0) * glow;
 
-    // アルファブレンド
-    let final_alpha = tex_color.a + glow_color.a * (1.0 - tex_color.a);
-    let final_color = (tex_color.rgb * tex_color.a + glow_color.rgb * glow_color.a * (1.0 - tex_color.a)) / max(final_alpha, 0.001);
-
-    return vec4<f32>(final_color, final_alpha);
+    return vec4<f32>(material.color.rgb * glow, alpha);
 }
 ```
 
@@ -173,17 +167,17 @@ pub fn spawn_enemy_bullet_with_shader(
     kind: EnemyBulletKind,
     glow_materials: &mut Assets<BulletGlowMaterial>,
     meshes: &mut Assets<Mesh>,
-    assets: &ScarletAssets,
 ) {
-    let color = kind.glow_color();    // LinearRgba に変換
-    let mesh = meshes.add(Circle::new(kind.visual_radius()));
-
-    let material = glow_materials.add(BulletGlowMaterial {
-        color,
-        glow_intensity: 1.5,
-        time: 0.0,
-        texture: assets.bullet_sheet.clone(),
-    });
+    // EnemyBulletKind::color() の Color を LinearRgba に変換し、
+    // glow_intensity 倍して HDR ブルームを発生させる
+    let base = kind.color().to_linear();
+    let color = LinearRgba::new(
+        base.red * 2.0,
+        base.green * 2.0,
+        base.blue * 2.0,
+        1.0,
+    );
+    let mesh = meshes.add(Circle::new(kind.collision_radius()));
 
     commands.spawn((
         EnemyBullet { damage: 1 },
@@ -222,9 +216,10 @@ pub fn update_bullet_glow_time(
 
 struct BulletTrailMaterial {
     color: vec4<f32>,
-    velocity_dir: vec2<f32>,   // 正規化された速度方向
-    trail_length: f32,          // 残像の長さ (UV空間)
+    length: f32,           // トレイルの長さ係数（UV スケール）
+    alpha_falloff: f32,    // 末端への透明度減衰率（デフォルト 2.0〜5.0）
     time: f32,
+    _padding: f32,
 }
 
 @group(2) @binding(0)
@@ -232,31 +227,19 @@ var<uniform> material: BulletTrailMaterial;
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    // UV空間で速度方向に沿って残像を描画
-    // 速度方向の逆が「後方」
-    let trail_dir = -material.velocity_dir;
+    // UV の Y 軸を「弾の進行方向」として扱う
+    // uv.y = 0.0 が先頭、uv.y = 1.0 が末端
+    let t = in.uv.y;
 
-    // 弾の中心 (UV 0.5, 0.5) から後方へのフェード
-    let center = vec2<f32>(0.5, 0.5);
-    let to_frag = in.uv - center;
+    // 末端に向かって alpha_falloff で透明度を減衰（pow で曲線をかける）
+    let trail_alpha = pow(max(0.0, 1.0 - t * material.length), material.alpha_falloff);
 
-    // 速度方向への射影
-    let projection = dot(to_frag, trail_dir);
-    let perp = to_frag - projection * trail_dir;
+    // 横方向の幅制限（中心 0.5 からの距離）
+    let horiz_dist = abs(in.uv.x - 0.5) * 2.0;
+    let width_alpha = max(0.0, 1.0 - horiz_dist * 3.0);
 
-    // 残像のアルファ計算
-    let trail_alpha = select(
-        0.0,
-        max(0.0, 1.0 - length(perp) * 8.0) * max(0.0, projection / material.trail_length),
-        projection > 0.0
-    );
-
-    // 本体の円形
-    let core_dist = length(to_frag);
-    let core_alpha = max(0.0, 1.0 - core_dist * 4.0);
-
-    let alpha = max(core_alpha, trail_alpha * 0.6);
-    return vec4<f32>(material.color.rgb, material.color.a * alpha);
+    let alpha = trail_alpha * width_alpha * material.color.a;
+    return vec4<f32>(material.color.rgb, alpha);
 }
 ```
 

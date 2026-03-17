@@ -276,6 +276,18 @@ pub fn debug_bullet_hitbox(
 }
 ```
 
+### シェーダー設計決定（確定）
+
+| 項目 | 決定内容 |
+|---|---|
+| カメラ | `hdr: true` + `BloomPlugin` を有効化 |
+| BulletGlowMaterial | 手続き的な光る円（テクスチャなし）。Phase 19 で差替予定 |
+| BulletGlowMaterial パラメータ | `color: LinearRgba`, `glow_intensity: f32`, `time: f32` |
+| BulletTrailMaterial | UV フェードアウト実装 |
+| BulletTrailMaterial パラメータ | `color: LinearRgba`, `length: f32`, `alpha_falloff: f32`, `time: f32` |
+| ScarletShadersPlugin 配置 | `scarlet-core/src/shaders/` モジュール（新クレートなし） |
+| main.rs 登録 | Phase 04 の PR に含める |
+
 ### シェーダー: 弾グロー追加
 
 `ScarletShadersPlugin` の初期実装を行う:
