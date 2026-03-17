@@ -50,3 +50,110 @@ impl Default for ShootTimer {
 /// (player bullets, enemy bullets, items, etc.).
 #[derive(Component)]
 pub struct DespawnOutOfBounds;
+
+// ---------------------------------------------------------------------------
+// Enemy bullet components
+// ---------------------------------------------------------------------------
+
+/// Visual and collision variant of an enemy bullet.
+///
+/// Each variant has a distinct [`collision_radius`](EnemyBulletKind::collision_radius)
+/// and [`color`](EnemyBulletKind::color). Bullet sprites are placeholder
+/// colored rectangles until real sprites are added in Phase 19.
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EnemyBulletKind {
+    SmallRound,
+    MediumRound,
+    LargeRound,
+    Rice,
+    Knife,
+    Star,
+    Bubble,
+}
+
+impl EnemyBulletKind {
+    /// Radius used for circle-based collision detection (px).
+    pub fn collision_radius(self) -> f32 {
+        match self {
+            Self::Knife => 4.0,
+            Self::SmallRound => 4.0,
+            Self::Rice => 5.0,
+            Self::MediumRound => 7.0,
+            Self::Star => 8.0,
+            Self::Bubble => 9.0,
+            Self::LargeRound => 11.0,
+        }
+    }
+
+    /// Placeholder sprite color (will be replaced by glow shader in Phase 19).
+    pub fn color(self) -> Color {
+        match self {
+            Self::SmallRound => Color::srgb(1.0, 0.2, 0.2),
+            Self::MediumRound => Color::srgb(0.2, 0.5, 1.0),
+            Self::LargeRound => Color::srgb(0.8, 0.2, 0.8),
+            Self::Rice => Color::srgb(1.0, 0.8, 0.2),
+            Self::Knife => Color::srgb(0.3, 1.0, 0.3),
+            Self::Star => Color::srgb(1.0, 1.0, 0.2),
+            Self::Bubble => Color::srgb(0.4, 0.9, 1.0),
+        }
+    }
+
+    /// Sprite size derived from collision radius (diameter × 2 for visibility).
+    pub fn sprite_size(self) -> Vec2 {
+        Vec2::splat(self.collision_radius() * 2.0)
+    }
+}
+
+/// Marker component for enemy-fired bullets.
+#[derive(Component)]
+pub struct EnemyBullet {
+    /// Damage dealt to the player on contact.
+    pub damage: u8,
+}
+
+/// Bullet-fire pattern attached to an enemy emitter.
+///
+/// Used by [`BulletEmitter`] to determine how bullets are spawned each tick.
+#[derive(Clone, Debug)]
+pub enum BulletPattern {
+    /// Fires `count` bullets equally spaced around a full circle.
+    Ring { count: u8, speed: f32 },
+    /// Fires `count` bullets spread over `spread_deg` degrees aimed at the player.
+    Aimed {
+        count: u8,
+        spread_deg: f32,
+        speed: f32,
+    },
+    /// Fires `count` bullets spread over `spread_deg` degrees at a fixed `angle_offset`.
+    Spread {
+        count: u8,
+        spread_deg: f32,
+        speed: f32,
+        /// Rotation offset in degrees from straight down.
+        angle_offset: f32,
+    },
+    /// Fires `arms` bullets continuously rotating at `rotation_speed_deg` deg/s.
+    ///
+    /// Requires [`crate::systems::danmaku::emitter::SpiralState`] on the same entity.
+    Spiral {
+        arms: u8,
+        speed: f32,
+        rotation_speed_deg: f32,
+    },
+}
+
+/// Attached to an enemy to make it periodically fire bullets.
+///
+/// The emitter ticks its `timer` every frame; when the timer fires it
+/// delegates to the appropriate pattern emit function.
+#[derive(Component)]
+pub struct BulletEmitter {
+    /// Firing pattern for this emitter.
+    pub pattern: BulletPattern,
+    /// Bullet variant to spawn.
+    pub bullet_kind: EnemyBulletKind,
+    /// Repeating timer that controls fire rate.
+    pub timer: Timer,
+    /// When `false` the emitter is paused and will not fire.
+    pub active: bool,
+}

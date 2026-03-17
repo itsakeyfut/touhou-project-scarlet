@@ -2,7 +2,9 @@ use bevy::prelude::*;
 
 use crate::{
     AppState,
+    components::bullet::{BulletEmitter, BulletPattern, EnemyBullet, EnemyBulletKind},
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH},
+    systems::danmaku::emitter::SpiralState,
 };
 
 /// Immediately transitions to [`AppState::Playing`] on startup.
@@ -40,4 +42,107 @@ pub fn debug_play_area_system(mut gizmos: Gizmos) {
         Vec2::new(0.0, PLAY_AREA_HALF_H),
         Color::srgba(1.0, 1.0, 0.0, 0.3),
     );
+}
+
+/// Spawns a set of dummy enemy emitters for in-development pattern testing.
+///
+/// Spawns four emitters at fixed positions, one per [`BulletPattern`] variant,
+/// so all patterns can be visually verified with `just dev`.
+pub fn spawn_debug_enemies(mut commands: Commands) {
+    // Ring — top-left
+    commands.spawn((
+        BulletEmitter {
+            pattern: BulletPattern::Ring {
+                count: 8,
+                speed: 120.0,
+            },
+            bullet_kind: EnemyBulletKind::SmallRound,
+            timer: Timer::from_seconds(1.5, TimerMode::Repeating),
+            active: true,
+        },
+        Sprite {
+            color: Color::srgb(0.5, 0.5, 0.5),
+            custom_size: Some(Vec2::splat(24.0)),
+            ..default()
+        },
+        Transform::from_xyz(-80.0, 120.0, 1.0),
+    ));
+
+    // Aimed — top-right
+    commands.spawn((
+        BulletEmitter {
+            pattern: BulletPattern::Aimed {
+                count: 3,
+                spread_deg: 20.0,
+                speed: 150.0,
+            },
+            bullet_kind: EnemyBulletKind::MediumRound,
+            timer: Timer::from_seconds(1.0, TimerMode::Repeating),
+            active: true,
+        },
+        Sprite {
+            color: Color::srgb(0.5, 0.5, 0.5),
+            custom_size: Some(Vec2::splat(24.0)),
+            ..default()
+        },
+        Transform::from_xyz(80.0, 120.0, 1.0),
+    ));
+
+    // Spread — centre-top
+    commands.spawn((
+        BulletEmitter {
+            pattern: BulletPattern::Spread {
+                count: 5,
+                spread_deg: 60.0,
+                speed: 130.0,
+                angle_offset: 0.0,
+            },
+            bullet_kind: EnemyBulletKind::Rice,
+            timer: Timer::from_seconds(1.2, TimerMode::Repeating),
+            active: true,
+        },
+        Sprite {
+            color: Color::srgb(0.5, 0.5, 0.5),
+            custom_size: Some(Vec2::splat(24.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 160.0, 1.0),
+    ));
+
+    // Spiral — centre
+    commands.spawn((
+        BulletEmitter {
+            pattern: BulletPattern::Spiral {
+                arms: 3,
+                speed: 100.0,
+                rotation_speed_deg: 120.0,
+            },
+            bullet_kind: EnemyBulletKind::Star,
+            timer: Timer::from_seconds(0.05, TimerMode::Repeating),
+            active: true,
+        },
+        SpiralState::default(),
+        Sprite {
+            color: Color::srgb(0.6, 0.3, 0.6),
+            custom_size: Some(Vec2::splat(24.0)),
+            ..default()
+        },
+        Transform::from_xyz(0.0, 60.0, 1.0),
+    ));
+}
+
+/// Draws collision circles for all active enemy bullets using Gizmos.
+///
+/// Only active with `debug-hitbox` feature.
+pub fn debug_bullet_hitbox(
+    mut gizmos: Gizmos,
+    bullets: Query<(&Transform, &EnemyBulletKind), With<EnemyBullet>>,
+) {
+    for (transform, kind) in &bullets {
+        gizmos.circle_2d(
+            Isometry2d::from_translation(transform.translation.truncate()),
+            kind.collision_radius(),
+            Color::srgba(0.0, 1.0, 0.0, 0.4),
+        );
+    }
 }

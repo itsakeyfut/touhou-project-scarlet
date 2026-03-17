@@ -10,8 +10,8 @@ pub mod states;
 pub mod systems;
 
 pub use components::{
-    BulletVelocity, DespawnOutOfBounds, InvincibilityTimer, Player, PlayerBullet, PlayerStats,
-    ShootTimer,
+    BulletEmitter, BulletPattern, BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind,
+    InvincibilityTimer, Player, PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::ShootEvent;
@@ -78,8 +78,22 @@ impl Plugin for ScarletCorePlugin {
             systems::bullet::despawn_out_of_bounds_system.in_set(GameSystemSet::Cleanup),
         );
 
+        // Danmaku emitter systems.
+        app.add_systems(
+            Update,
+            (
+                systems::danmaku::emitter::bullet_emitter_system,
+                systems::danmaku::emitter::update_spiral_emitters,
+            )
+                .in_set(GameSystemSet::BulletEmit),
+        );
+
         #[cfg(feature = "debug-hitbox")]
         app.add_systems(Startup, debug::debug_skip_to_playing)
-            .add_systems(Update, debug::debug_play_area_system);
+            .add_systems(OnEnter(AppState::Playing), debug::spawn_debug_enemies)
+            .add_systems(
+                Update,
+                (debug::debug_play_area_system, debug::debug_bullet_hitbox),
+            );
     }
 }
