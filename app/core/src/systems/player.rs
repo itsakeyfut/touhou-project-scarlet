@@ -1,17 +1,23 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::player::{Player, PlayerStats},
+    components::{
+        bullet::ShootTimer,
+        player::{Player, PlayerStats},
+    },
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
+    events::ShootEvent,
 };
 
 /// Spawns the player entity at the bottom-center of the play area.
 ///
 /// Uses a placeholder colored rectangle until real sprites are added in Phase 19.
+/// [`ShootTimer`] is attached here so the firing rate is tracked per-player.
 pub fn spawn_player(mut commands: Commands) {
     commands.spawn((
         Player,
         PlayerStats::default(),
+        ShootTimer::default(),
         Sprite {
             color: Color::srgb(1.0, 0.3, 0.3),
             custom_size: Some(Vec2::splat(16.0)),
@@ -19,6 +25,31 @@ pub fn spawn_player(mut commands: Commands) {
         },
         Transform::from_xyz(0.0, -PLAY_AREA_HALF_H + 60.0, 1.0),
     ));
+}
+
+/// Reads Z-key input and emits [`ShootEvent`] at the rate set by [`ShootTimer`].
+///
+/// Registered in [`crate::GameSystemSet::Input`].
+/// The event carries the player's current world position so that
+/// [`crate::systems::bullet::bullet_spawn_system`] can place bullets correctly
+/// without needing to query the player again.
+pub fn shoot_input_system(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut query: Query<(&Transform, &mut ShootTimer), With<Player>>,
+    mut events: MessageWriter<ShootEvent>,
+    time: Res<Time>,
+) {
+    let Ok((transform, mut timer)) = query.single_mut() else {
+        return;
+    };
+
+    timer.timer.tick(time.delta());
+
+    if keys.pressed(KeyCode::KeyZ) && timer.timer.just_finished() {
+        events.write(ShootEvent {
+            origin: transform.translation.truncate(),
+        });
+    }
 }
 
 /// Moves the player based on keyboard input.
