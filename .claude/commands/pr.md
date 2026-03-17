@@ -102,7 +102,7 @@ Complete the implementation workflow:
 
 8. **Create PR using gh command:**
    ```bash
-   gh pr create --title "..." --body "..."
+   gh pr create --title "..." --body "..." --assignee itsakeyfut
    ```
 
 **PR Guidelines:**
