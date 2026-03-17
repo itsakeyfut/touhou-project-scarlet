@@ -1,0 +1,22 @@
+[package]
+name = "scarlet-core"
+version.workspace = true 
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = []
+debug-hitbox = [] # Show debug hitbox visualization
+
+[dependencies]
+bevy = { workspace = true }
+rand = { workspace = true }
+ron = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
