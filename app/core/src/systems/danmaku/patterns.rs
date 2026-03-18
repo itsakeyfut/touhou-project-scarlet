@@ -1,14 +1,23 @@
 use bevy::prelude::*;
 
-use crate::components::bullet::{BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind};
+use crate::{
+    components::bullet::{
+        BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind,
+    },
+    shaders::{BulletGlowMaterial, BulletTrailMaterial},
+};
 
 // ---------------------------------------------------------------------------
 // Public emit helpers (called by emitter systems)
 // ---------------------------------------------------------------------------
 
 /// Fires `count` bullets equally spaced around a full 360° circle.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_ring(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     count: u8,
     speed: f32,
@@ -18,7 +27,15 @@ pub fn emit_ring(
     for i in 0..count {
         let angle = (step * i as f32).to_radians();
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
@@ -26,8 +43,12 @@ pub fn emit_ring(
 ///
 /// When `count` is 1 the single bullet points directly at the player.
 /// When `spread_deg` is 0 all bullets travel in the same direction.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_aimed(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     player_pos: Vec2,
     count: u8,
@@ -47,13 +68,25 @@ pub fn emit_aimed(
     for i in 0..count {
         let angle = base_angle - half + step * i as f32;
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
 /// Fires `count` bullets in a fixed fan at `angle_offset` degrees from straight down.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_spread(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     count: u8,
     spread_deg: f32,
@@ -73,7 +106,15 @@ pub fn emit_spread(
         let angle = (-spread_deg / 2.0 + step * i as f32 + angle_offset).to_radians()
             - std::f32::consts::FRAC_PI_2;
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
@@ -81,8 +122,12 @@ pub fn emit_spread(
 ///
 /// Called every frame by the spiral emitter system; the angle is advanced
 /// externally by [`super::emitter::SpiralState`].
+#[allow(clippy::too_many_arguments)]
 pub fn emit_spiral_frame(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     arms: u8,
     speed: f32,
@@ -93,7 +138,15 @@ pub fn emit_spiral_frame(
     for arm in 0..arms {
         let angle = (current_angle + arm_gap * arm as f32).to_radians();
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
@@ -103,23 +156,56 @@ pub fn emit_spiral_frame(
 
 pub(super) fn spawn_enemy_bullet(
     commands: &mut Commands,
+    meshes: &mut Assets<Mesh>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     velocity: Vec2,
     kind: EnemyBulletKind,
 ) {
-    commands.spawn((
-        EnemyBullet { damage: 1 },
-        kind,
-        BulletVelocity(velocity),
-        Sprite {
-            color: kind.color(),
-            custom_size: Some(kind.sprite_size()),
-            ..default()
-        },
-        // TODO(phase-04, #30): replace Sprite with Mesh2d + BulletGlowMaterial
-        Transform::from_translation(origin.extend(1.5)),
-        DespawnOutOfBounds,
-    ));
+    let radius = kind.collision_radius();
+    let color = LinearRgba::from(kind.color());
+
+    // --- Glow circle (bullet body) ---
+    let glow_mesh = meshes.add(Circle::new(radius));
+    let glow_mat = glow_mats.add(BulletGlowMaterial { color, ..default() });
+
+    // --- Trail ribbon geometry ---
+    // Rectangle oriented along the velocity direction.
+    // UV.y = 0 at the bullet head (opaque); UV.y = 1 at the tail (transparent).
+    let trail_h = radius * 6.0;
+    let trail_w = radius * 1.5;
+    let vel_dir = velocity.normalize_or(Vec2::Y);
+    // Rotate so that local +Y aligns with the velocity direction.
+    let trail_rot = Quat::from_rotation_z(vel_dir.to_angle() - std::f32::consts::FRAC_PI_2);
+    // Shift the rectangle backwards so its top edge sits at the bullet centre.
+    // The offset is in the parent (bullet) local space.
+    let trail_offset = (-vel_dir * trail_h * 0.5).extend(-0.1);
+    let trail_mesh = meshes.add(Rectangle::new(trail_w, trail_h));
+    let trail_mat = trail_mats.add(BulletTrailMaterial { color, ..default() });
+
+    commands
+        .spawn((
+            EnemyBullet { damage: 1 },
+            kind,
+            BulletVelocity(velocity),
+            Mesh2d(glow_mesh),
+            MeshMaterial2d(glow_mat),
+            Transform::from_translation(origin.extend(1.5)),
+            DespawnOutOfBounds,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                BulletTrail,
+                Mesh2d(trail_mesh),
+                MeshMaterial2d(trail_mat),
+                Transform {
+                    translation: trail_offset,
+                    rotation: trail_rot,
+                    scale: Vec3::ONE,
+                },
+            ));
+        });
 }
 
 // ---------------------------------------------------------------------------

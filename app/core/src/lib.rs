@@ -6,17 +6,19 @@ pub mod debug;
 pub mod events;
 pub mod game_set;
 pub mod resources;
+pub mod shaders;
 pub mod states;
 pub mod systems;
 
 pub use components::{
-    BulletEmitter, BulletPattern, BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind,
-    InvincibilityTimer, Player, PlayerBullet, PlayerStats, ShootTimer,
+    BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet,
+    EnemyBulletKind, InvincibilityTimer, Player, PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::ShootEvent;
 pub use game_set::GameSystemSet;
 pub use resources::GameData;
+pub use shaders::ScarletShadersPlugin;
 pub use states::AppState;
 
 /// Core game plugin.
@@ -27,6 +29,8 @@ pub struct ScarletCorePlugin;
 
 impl Plugin for ScarletCorePlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(shaders::ScarletShadersPlugin);
+
         app.init_state::<AppState>();
 
         // Events.

@@ -5,6 +5,7 @@ use crate::{
         bullet::{BulletEmitter, BulletPattern},
         player::Player,
     },
+    shaders::{BulletGlowMaterial, BulletTrailMaterial},
     systems::danmaku::patterns::{emit_aimed, emit_ring, emit_spiral_frame, emit_spread},
 };
 
@@ -43,6 +44,9 @@ impl Default for SpiralState {
 /// Registered in [`crate::GameSystemSet::BulletEmit`].
 pub fn bullet_emitter_system(
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut glow_mats: ResMut<Assets<BulletGlowMaterial>>,
+    mut trail_mats: ResMut<Assets<BulletTrailMaterial>>,
     mut emitters: Query<(&Transform, &mut BulletEmitter), Without<SpiralState>>,
     player: Query<&Transform, (With<Player>, Without<BulletEmitter>)>,
     time: Res<Time>,
@@ -65,7 +69,16 @@ pub fn bullet_emitter_system(
 
         match emitter.pattern.clone() {
             BulletPattern::Ring { count, speed } => {
-                emit_ring(&mut commands, origin, count, speed, kind);
+                emit_ring(
+                    &mut commands,
+                    &mut meshes,
+                    &mut glow_mats,
+                    &mut trail_mats,
+                    origin,
+                    count,
+                    speed,
+                    kind,
+                );
             }
             BulletPattern::Aimed {
                 count,
@@ -74,6 +87,9 @@ pub fn bullet_emitter_system(
             } => {
                 emit_aimed(
                     &mut commands,
+                    &mut meshes,
+                    &mut glow_mats,
+                    &mut trail_mats,
                     origin,
                     player_pos,
                     count,
@@ -90,6 +106,9 @@ pub fn bullet_emitter_system(
             } => {
                 emit_spread(
                     &mut commands,
+                    &mut meshes,
+                    &mut glow_mats,
+                    &mut trail_mats,
                     origin,
                     count,
                     spread_deg,
@@ -116,6 +135,9 @@ pub fn bullet_emitter_system(
 /// Registered in [`crate::GameSystemSet::BulletEmit`].
 pub fn update_spiral_emitters(
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut glow_mats: ResMut<Assets<BulletGlowMaterial>>,
+    mut trail_mats: ResMut<Assets<BulletTrailMaterial>>,
     mut spirals: Query<(&Transform, &BulletEmitter, &mut SpiralState)>,
     time: Res<Time>,
 ) {
@@ -134,6 +156,9 @@ pub fn update_spiral_emitters(
             let origin = transform.translation.truncate();
             emit_spiral_frame(
                 &mut commands,
+                &mut meshes,
+                &mut glow_mats,
+                &mut trail_mats,
                 origin,
                 arms,
                 speed,
