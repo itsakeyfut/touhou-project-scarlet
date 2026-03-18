@@ -111,6 +111,14 @@ pub struct EnemyBullet {
     pub damage: u8,
 }
 
+/// Marker component for the trail ribbon child entity attached to an [`EnemyBullet`].
+///
+/// Spawned as a child of the bullet entity so that it is automatically
+/// despawned when the parent bullet is removed. The trail mesh is a
+/// `Rectangle` oriented along the bullet's travel direction.
+#[derive(Component)]
+pub struct BulletTrail;
+
 /// Bullet-fire pattern attached to an enemy emitter.
 ///
 /// Used by [`BulletEmitter`] to determine how bullets are spawned each tick.

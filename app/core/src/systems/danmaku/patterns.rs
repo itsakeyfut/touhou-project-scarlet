@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::bullet::{BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind},
-    shaders::BulletGlowMaterial,
+    components::bullet::{
+        BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind,
+    },
+    shaders::{BulletGlowMaterial, BulletTrailMaterial},
 };
 
 // ---------------------------------------------------------------------------
@@ -10,10 +12,12 @@ use crate::{
 // ---------------------------------------------------------------------------
 
 /// Fires `count` bullets equally spaced around a full 360° circle.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_ring(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<BulletGlowMaterial>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     count: u8,
     speed: f32,
@@ -23,7 +27,15 @@ pub fn emit_ring(
     for i in 0..count {
         let angle = (step * i as f32).to_radians();
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
@@ -35,7 +47,8 @@ pub fn emit_ring(
 pub fn emit_aimed(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<BulletGlowMaterial>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     player_pos: Vec2,
     count: u8,
@@ -55,7 +68,15 @@ pub fn emit_aimed(
     for i in 0..count {
         let angle = base_angle - half + step * i as f32;
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
@@ -64,7 +85,8 @@ pub fn emit_aimed(
 pub fn emit_spread(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<BulletGlowMaterial>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     count: u8,
     spread_deg: f32,
@@ -84,7 +106,15 @@ pub fn emit_spread(
         let angle = (-spread_deg / 2.0 + step * i as f32 + angle_offset).to_radians()
             - std::f32::consts::FRAC_PI_2;
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
@@ -96,7 +126,8 @@ pub fn emit_spread(
 pub fn emit_spiral_frame(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<BulletGlowMaterial>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     arms: u8,
     speed: f32,
@@ -107,7 +138,15 @@ pub fn emit_spiral_frame(
     for arm in 0..arms {
         let angle = (current_angle + arm_gap * arm as f32).to_radians();
         let dir = Vec2::from_angle(angle);
-        spawn_enemy_bullet(commands, meshes, materials, origin, dir * speed, kind);
+        spawn_enemy_bullet(
+            commands,
+            meshes,
+            glow_mats,
+            trail_mats,
+            origin,
+            dir * speed,
+            kind,
+        );
     }
 }
 
@@ -118,24 +157,55 @@ pub fn emit_spiral_frame(
 pub(super) fn spawn_enemy_bullet(
     commands: &mut Commands,
     meshes: &mut Assets<Mesh>,
-    materials: &mut Assets<BulletGlowMaterial>,
+    glow_mats: &mut Assets<BulletGlowMaterial>,
+    trail_mats: &mut Assets<BulletTrailMaterial>,
     origin: Vec2,
     velocity: Vec2,
     kind: EnemyBulletKind,
 ) {
     let radius = kind.collision_radius();
     let color = LinearRgba::from(kind.color());
-    let mesh = meshes.add(Circle::new(radius));
-    let mat = materials.add(BulletGlowMaterial { color, ..default() });
-    commands.spawn((
-        EnemyBullet { damage: 1 },
-        kind,
-        BulletVelocity(velocity),
-        Mesh2d(mesh),
-        MeshMaterial2d(mat),
-        Transform::from_translation(origin.extend(1.5)),
-        DespawnOutOfBounds,
-    ));
+
+    // --- Glow circle (bullet body) ---
+    let glow_mesh = meshes.add(Circle::new(radius));
+    let glow_mat = glow_mats.add(BulletGlowMaterial { color, ..default() });
+
+    // --- Trail ribbon geometry ---
+    // Rectangle oriented along the velocity direction.
+    // UV.y = 0 at the bullet head (opaque); UV.y = 1 at the tail (transparent).
+    let trail_h = radius * 6.0;
+    let trail_w = radius * 1.5;
+    let vel_dir = velocity.normalize_or(Vec2::Y);
+    // Rotate so that local +Y aligns with the velocity direction.
+    let trail_rot = Quat::from_rotation_z(vel_dir.to_angle() - std::f32::consts::FRAC_PI_2);
+    // Shift the rectangle backwards so its top edge sits at the bullet centre.
+    // The offset is in the parent (bullet) local space.
+    let trail_offset = (-vel_dir * trail_h * 0.5).extend(-0.1);
+    let trail_mesh = meshes.add(Rectangle::new(trail_w, trail_h));
+    let trail_mat = trail_mats.add(BulletTrailMaterial { color, ..default() });
+
+    commands
+        .spawn((
+            EnemyBullet { damage: 1 },
+            kind,
+            BulletVelocity(velocity),
+            Mesh2d(glow_mesh),
+            MeshMaterial2d(glow_mat),
+            Transform::from_translation(origin.extend(1.5)),
+            DespawnOutOfBounds,
+        ))
+        .with_children(|parent| {
+            parent.spawn((
+                BulletTrail,
+                Mesh2d(trail_mesh),
+                MeshMaterial2d(trail_mat),
+                Transform {
+                    translation: trail_offset,
+                    rotation: trail_rot,
+                    scale: Vec3::ONE,
+                },
+            ));
+        });
 }
 
 // ---------------------------------------------------------------------------

@@ -11,8 +11,8 @@ pub mod states;
 pub mod systems;
 
 pub use components::{
-    BulletEmitter, BulletPattern, BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind,
-    InvincibilityTimer, Player, PlayerBullet, PlayerStats, ShootTimer,
+    BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet,
+    EnemyBulletKind, InvincibilityTimer, Player, PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::ShootEvent;

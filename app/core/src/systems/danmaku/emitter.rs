@@ -5,7 +5,7 @@ use crate::{
         bullet::{BulletEmitter, BulletPattern},
         player::Player,
     },
-    shaders::BulletGlowMaterial,
+    shaders::{BulletGlowMaterial, BulletTrailMaterial},
     systems::danmaku::patterns::{emit_aimed, emit_ring, emit_spiral_frame, emit_spread},
 };
 
@@ -45,7 +45,8 @@ impl Default for SpiralState {
 pub fn bullet_emitter_system(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<BulletGlowMaterial>>,
+    mut glow_mats: ResMut<Assets<BulletGlowMaterial>>,
+    mut trail_mats: ResMut<Assets<BulletTrailMaterial>>,
     mut emitters: Query<(&Transform, &mut BulletEmitter), Without<SpiralState>>,
     player: Query<&Transform, (With<Player>, Without<BulletEmitter>)>,
     time: Res<Time>,
@@ -71,7 +72,8 @@ pub fn bullet_emitter_system(
                 emit_ring(
                     &mut commands,
                     &mut meshes,
-                    &mut materials,
+                    &mut glow_mats,
+                    &mut trail_mats,
                     origin,
                     count,
                     speed,
@@ -86,7 +88,8 @@ pub fn bullet_emitter_system(
                 emit_aimed(
                     &mut commands,
                     &mut meshes,
-                    &mut materials,
+                    &mut glow_mats,
+                    &mut trail_mats,
                     origin,
                     player_pos,
                     count,
@@ -104,7 +107,8 @@ pub fn bullet_emitter_system(
                 emit_spread(
                     &mut commands,
                     &mut meshes,
-                    &mut materials,
+                    &mut glow_mats,
+                    &mut trail_mats,
                     origin,
                     count,
                     spread_deg,
@@ -132,7 +136,8 @@ pub fn bullet_emitter_system(
 pub fn update_spiral_emitters(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<BulletGlowMaterial>>,
+    mut glow_mats: ResMut<Assets<BulletGlowMaterial>>,
+    mut trail_mats: ResMut<Assets<BulletTrailMaterial>>,
     mut spirals: Query<(&Transform, &BulletEmitter, &mut SpiralState)>,
     time: Res<Time>,
 ) {
@@ -152,7 +157,8 @@ pub fn update_spiral_emitters(
             emit_spiral_frame(
                 &mut commands,
                 &mut meshes,
-                &mut materials,
+                &mut glow_mats,
+                &mut trail_mats,
                 origin,
                 arms,
                 speed,
