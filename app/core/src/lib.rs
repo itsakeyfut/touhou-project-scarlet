@@ -7,6 +7,7 @@ pub mod events;
 pub mod game_set;
 pub mod resources;
 pub mod shaders;
+pub mod stages;
 pub mod states;
 pub mod systems;
 
@@ -72,6 +73,12 @@ impl Plugin for ScarletCorePlugin {
             )
                 .chain()
                 .run_if(in_state(AppState::Playing)),
+        );
+
+        // Player systems.
+        app.add_systems(
+            OnEnter(AppState::Playing),
+            stages::stage1::load_stage1_system,
         );
 
         // Player systems.
