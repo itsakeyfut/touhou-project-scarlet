@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     components::bullet::{BulletVelocity, DespawnOutOfBounds, PlayerBullet},
+    config::PlayerBulletConfigParams,
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
     events::ShootEvent,
     resources::GameData,
@@ -11,12 +12,6 @@ use crate::{
 ///
 /// Prevents visible pop-in/out at the exact edge of the play area.
 const DESPAWN_MARGIN: f32 = 32.0;
-
-/// Speed of a newly spawned player bullet in pixels per second.
-const BULLET_SPEED: f32 = 600.0;
-
-/// Horizontal spread between bullets when firing multiple streams.
-const BULLET_SPREAD: f32 = 10.0;
 
 // ---------------------------------------------------------------------------
 // Public systems
@@ -74,10 +69,11 @@ pub fn bullet_spawn_system(
     mut commands: Commands,
     mut events: MessageReader<ShootEvent>,
     game_data: Res<GameData>,
+    bullet_cfg: PlayerBulletConfigParams,
 ) {
     for event in events.read() {
         let count = bullet_count_from_power(game_data.power);
-        spawn_bullet_stream(&mut commands, event.origin, count);
+        spawn_bullet_stream(&mut commands, event.origin, count, &bullet_cfg);
     }
 }
 
@@ -96,25 +92,40 @@ fn bullet_count_from_power(power: u8) -> u8 {
 }
 
 /// Spawns `count` bullets in a horizontal fan centred on `origin`.
-fn spawn_bullet_stream(commands: &mut Commands, origin: Vec2, count: u8) {
+fn spawn_bullet_stream(
+    commands: &mut Commands,
+    origin: Vec2,
+    count: u8,
+    cfg: &PlayerBulletConfigParams,
+) {
+    let spread = cfg.spread();
+    let speed = cfg.speed();
+    let spread_speed_scale = cfg.spread_speed_scale();
+    let origin_y_offset = cfg.origin_y_offset();
+    let sprite_w = cfg.sprite_width();
+    let sprite_h = cfg.sprite_height();
+    let damage = cfg.damage();
+
     let count = count.max(1);
     for i in 0..count {
         let x_offset = if count > 1 {
             let t = i as f32 / (count - 1) as f32; // 0.0 … 1.0
-            -BULLET_SPREAD / 2.0 + BULLET_SPREAD * t
+            -spread / 2.0 + spread * t
         } else {
             0.0
         };
 
         commands.spawn((
-            PlayerBullet::default(),
-            BulletVelocity(Vec2::new(x_offset * 5.0, BULLET_SPEED)),
+            PlayerBullet { damage },
+            BulletVelocity(Vec2::new(x_offset * spread_speed_scale, speed)),
             Sprite {
                 color: Color::srgb(1.0, 0.8, 0.0),
-                custom_size: Some(Vec2::new(4.0, 12.0)),
+                custom_size: Some(Vec2::new(sprite_w, sprite_h)),
                 ..default()
             },
-            Transform::from_translation((origin + Vec2::new(x_offset, 16.0)).extend(2.0)),
+            Transform::from_translation(
+                (origin + Vec2::new(x_offset, origin_y_offset)).extend(2.0),
+            ),
             DespawnOutOfBounds,
         ));
     }

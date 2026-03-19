@@ -28,8 +28,10 @@ pub use resources::{
     SpawnEntry, StageData,
 };
 pub use config::{
-    GameRulesConfig, GameRulesConfigHandle, GameRulesConfigParams, PlayerConfig,
-    PlayerConfigHandle, PlayerConfigParams, ScarletConfigPlugin,
+    EnemyBulletConfig, EnemyBulletConfigHandle, EnemyBulletConfigParams, FodderEnemyConfig,
+    FodderEnemyConfigHandle, FodderEnemyConfigParams, GameRulesConfig, GameRulesConfigHandle,
+    GameRulesConfigParams, PlayerBulletConfig, PlayerBulletConfigHandle, PlayerBulletConfigParams,
+    PlayerConfig, PlayerConfigHandle, PlayerConfigParams, ScarletConfigPlugin,
 };
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;

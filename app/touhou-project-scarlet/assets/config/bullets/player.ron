@@ -1,0 +1,22 @@
+// Player-bullet configuration — movement, spread, spawn offset, collision, and damage.
+//
+// | Field               | Unit  | Description                                           |
+// |---------------------|-------|-------------------------------------------------------|
+// | speed               | px/s  | Forward (upward) speed of each bullet                 |
+// | spread              | px    | Total horizontal span of the bullet fan               |
+// | spread_speed_scale  | —     | Multiplier on per-bullet x-offset → horizontal vel.   |
+// | origin_y_offset     | px    | Y distance above the player where bullets spawn       |
+// | collision_radius    | px    | Circle radius used for bullet → enemy hit detection   |
+// | sprite_width        | px    | Placeholder sprite width (until Phase 19 sprites)     |
+// | sprite_height       | px    | Placeholder sprite height (until Phase 19 sprites)    |
+// | damage              | —     | Damage dealt to an enemy on contact                   |
+PlayerBulletConfig(
+    speed: 600.0,
+    spread: 10.0,
+    spread_speed_scale: 5.0,
+    origin_y_offset: 16.0,
+    collision_radius: 3.0,
+    sprite_width: 4.0,
+    sprite_height: 12.0,
+    damage: 12.0,
+)

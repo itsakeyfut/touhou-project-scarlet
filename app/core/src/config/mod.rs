@@ -14,11 +14,17 @@
 //! | [`player`]      | `PlayerConfig` + `PlayerConfigHandle` + `PlayerConfigParams` |
 //! | [`game_rules`]  | `GameRulesConfig` + `GameRulesConfigHandle` + `GameRulesConfigParams` |
 
+pub mod enemy_bullet;
+pub mod fodder_enemy;
 pub mod game_rules;
 pub mod player;
+pub mod player_bullet;
 
+pub use enemy_bullet::*;
+pub use fodder_enemy::*;
 pub use game_rules::*;
 pub use player::*;
+pub use player_bullet::*;
 
 use bevy::asset::io::Reader;
 use bevy::asset::{AssetLoader, LoadContext};
@@ -75,6 +81,9 @@ macro_rules! ron_asset_loader {
 
 ron_asset_loader!(PlayerConfigLoader, player::PlayerConfigPartial => PlayerConfig);
 ron_asset_loader!(GameRulesConfigLoader, game_rules::GameRulesConfigPartial => GameRulesConfig);
+ron_asset_loader!(FodderEnemyConfigLoader, fodder_enemy::FodderEnemyConfigPartial => FodderEnemyConfig);
+ron_asset_loader!(PlayerBulletConfigLoader, player_bullet::PlayerBulletConfigPartial => PlayerBulletConfig);
+ron_asset_loader!(EnemyBulletConfigLoader, enemy_bullet::EnemyBulletConfigPartial => EnemyBulletConfig);
 
 // ---------------------------------------------------------------------------
 // Plugin
@@ -97,21 +106,42 @@ impl Plugin for ScarletConfigPlugin {
         app.init_asset::<PlayerConfig>()
             .register_asset_loader(PlayerConfigLoader)
             .init_asset::<GameRulesConfig>()
-            .register_asset_loader(GameRulesConfigLoader);
+            .register_asset_loader(GameRulesConfigLoader)
+            .init_asset::<FodderEnemyConfig>()
+            .register_asset_loader(FodderEnemyConfigLoader)
+            .init_asset::<PlayerBulletConfig>()
+            .register_asset_loader(PlayerBulletConfigLoader)
+            .init_asset::<EnemyBulletConfig>()
+            .register_asset_loader(EnemyBulletConfigLoader);
 
         // Load config files and insert handles as resources.
         let asset_server = app.world_mut().resource::<AssetServer>();
         let player_handle: Handle<PlayerConfig> = asset_server.load("config/player.ron");
         let game_rules_handle: Handle<GameRulesConfig> =
             asset_server.load("config/game_rules.ron");
+        let fodder_enemy_handle: Handle<FodderEnemyConfig> =
+            asset_server.load("config/enemies/fodder.ron");
+        let player_bullet_handle: Handle<PlayerBulletConfig> =
+            asset_server.load("config/bullets/player.ron");
+        let enemy_bullet_handle: Handle<EnemyBulletConfig> =
+            asset_server.load("config/bullets/enemy.ron");
 
         app.insert_resource(PlayerConfigHandle(player_handle))
-            .insert_resource(GameRulesConfigHandle(game_rules_handle));
+            .insert_resource(GameRulesConfigHandle(game_rules_handle))
+            .insert_resource(FodderEnemyConfigHandle(fodder_enemy_handle))
+            .insert_resource(PlayerBulletConfigHandle(player_bullet_handle))
+            .insert_resource(EnemyBulletConfigHandle(enemy_bullet_handle));
 
         // Hot-reload logging (runs unconditionally in all states).
         app.add_systems(
             Update,
-            (hot_reload_player_config, hot_reload_game_rules_config),
+            (
+                hot_reload_player_config,
+                hot_reload_game_rules_config,
+                hot_reload_fodder_enemy_config,
+                hot_reload_player_bullet_config,
+                hot_reload_enemy_bullet_config,
+            ),
         );
     }
 }

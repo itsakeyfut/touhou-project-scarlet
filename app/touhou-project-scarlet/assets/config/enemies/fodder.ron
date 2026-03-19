@@ -1,0 +1,24 @@
+// Fodder-enemy configuration — per-kind HP, hitbox radius, and score value.
+//
+// | Field            | Unit | Description                                      |
+// |------------------|------|--------------------------------------------------|
+// | fairy_hp         | —    | Base HP for a Fairy (standard small enemy)       |
+// | fairy_radius     | px   | Bullet-collision hitbox radius for a Fairy       |
+// | fairy_score      | pts  | Score awarded on defeating a Fairy               |
+// | bat_hp           | —    | Base HP for a Bat (small, fast, low HP)          |
+// | bat_radius       | px   | Bullet-collision hitbox radius for a Bat         |
+// | bat_score        | pts  | Score awarded on defeating a Bat                 |
+// | tall_fairy_hp    | —    | Base HP for a TallFairy (larger, tankier Fairy)  |
+// | tall_fairy_radius| px   | Bullet-collision hitbox radius for a TallFairy   |
+// | tall_fairy_score | pts  | Score awarded on defeating a TallFairy           |
+FodderEnemyConfig(
+    fairy_hp: 10.0,
+    fairy_radius: 12.0,
+    fairy_score: 100,
+    bat_hp: 5.0,
+    bat_radius: 8.0,
+    bat_score: 50,
+    tall_fairy_hp: 30.0,
+    tall_fairy_radius: 16.0,
+    tall_fairy_score: 300,
+)

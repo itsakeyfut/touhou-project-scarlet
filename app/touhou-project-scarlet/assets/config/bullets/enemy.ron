@@ -1,0 +1,24 @@
+// Enemy-bullet configuration — collision radius per bullet kind.
+//
+// All radii are used for circle-based collision detection.
+// The glow-mesh radius in the danmaku spawn helpers also derives from these
+// values (full replacement planned for Phase 19 sprites).
+//
+// | Field               | Unit | Description                                   |
+// |---------------------|------|-----------------------------------------------|
+// | small_round_radius  | px   | SmallRound — compact circular bullet          |
+// | knife_radius        | px   | Knife — thin elongated blade bullet           |
+// | rice_radius         | px   | Rice — small oval bullet                      |
+// | medium_round_radius | px   | MediumRound — standard circular bullet        |
+// | star_radius         | px   | Star — medium star-shaped bullet              |
+// | bubble_radius       | px   | Bubble — large translucent circular bullet    |
+// | large_round_radius  | px   | LargeRound — large circular bullet            |
+EnemyBulletConfig(
+    small_round_radius: 4.0,
+    knife_radius: 4.0,
+    rice_radius: 5.0,
+    medium_round_radius: 7.0,
+    star_radius: 8.0,
+    bubble_radius: 9.0,
+    large_round_radius: 11.0,
+)
