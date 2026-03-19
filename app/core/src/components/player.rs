@@ -11,6 +11,7 @@ pub struct Player;
 /// - Focus speed:  100 px/s (Shift held)
 /// - Hitbox: 2.0 px radius (tight, as in the original)
 /// - Graze:  16 px radius
+/// - Item pickup attraction: 24 px radius
 #[derive(Component)]
 pub struct PlayerStats {
     /// Movement speed in pixels per second (normal mode).
@@ -21,6 +22,11 @@ pub struct PlayerStats {
     pub hitbox_radius: f32,
     /// Radius of the graze detection zone in pixels.
     pub graze_radius: f32,
+    /// Radius within which nearby items start being attracted toward the player (px).
+    ///
+    /// Items within this distance switch to attracted mode and move toward the
+    /// player at [`crate::systems::item::ITEM_ATTRACT_SPEED`] px/s.
+    pub pickup_radius: f32,
 }
 
 impl Default for PlayerStats {
@@ -30,6 +36,7 @@ impl Default for PlayerStats {
             slow_speed: 100.0,
             hitbox_radius: 2.0,
             graze_radius: 16.0,
+            pickup_radius: 24.0,
         }
     }
 }
