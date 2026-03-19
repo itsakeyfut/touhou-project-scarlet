@@ -7,10 +7,7 @@ use crate::{
         player::{Player, PlayerStats},
     },
     events::EnemyDefeatedEvent,
-    resources::{
-        FragmentTracker, GameData,
-        fragment::{BOMB_EXTEND_FRAGMENTS, LIFE_EXTEND_FRAGMENTS},
-    },
+    resources::{FragmentTracker, GameData},
 };
 
 // ---------------------------------------------------------------------------
@@ -265,18 +262,10 @@ fn apply_item(
             game_data.score += value as u64;
         }
         ItemKind::LifeFragment => {
-            tracker.life_fragments += 1;
-            if tracker.life_fragments >= LIFE_EXTEND_FRAGMENTS {
-                tracker.life_fragments = 0;
-                game_data.lives = game_data.lives.saturating_add(1);
-            }
+            tracker.life_fragments = tracker.life_fragments.saturating_add(1);
         }
         ItemKind::BombFragment => {
-            tracker.bomb_fragments += 1;
-            if tracker.bomb_fragments >= BOMB_EXTEND_FRAGMENTS {
-                tracker.bomb_fragments = 0;
-                game_data.bombs = game_data.bombs.saturating_add(1).min(3);
-            }
+            tracker.bomb_fragments = tracker.bomb_fragments.saturating_add(1);
         }
     }
 }
@@ -436,52 +425,42 @@ mod tests {
         assert_eq!(gd.score, POI_BASE_VALUE as u64);
     }
 
-    /// Four LifeFragments must not grant an extra life.
+    /// Four LifeFragments must increment the counter to 4; no extend occurs
+    /// (extend is handled by [`crate::systems::score::check_extend_system`]).
     #[test]
-    fn four_life_fragments_do_not_extend() {
+    fn four_life_fragments_increments_counter() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..4 {
             apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
         }
-        assert_eq!(gd.lives, 2);
+        assert_eq!(gd.lives, 2, "apply_item must not extend lives");
         assert_eq!(tracker.life_fragments, 4);
     }
 
-    /// Five LifeFragments must grant one extra life and reset the counter.
+    /// Five LifeFragments must set the counter to 5; extend is deferred to
+    /// [`crate::systems::score::check_extend_system`].
     #[test]
-    fn five_life_fragments_grant_extend() {
+    fn five_life_fragments_increments_counter() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
             apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
         }
-        assert_eq!(gd.lives, 3);
-        assert_eq!(tracker.life_fragments, 0);
+        assert_eq!(gd.lives, 2, "apply_item must not extend lives");
+        assert_eq!(tracker.life_fragments, 5);
     }
 
-    /// Five BombFragments must grant one extra bomb (max 3) and reset counter.
+    /// Five BombFragments must set the counter to 5; extend is deferred to
+    /// [`crate::systems::score::check_extend_system`].
     #[test]
-    fn five_bomb_fragments_grant_extend() {
+    fn five_bomb_fragments_increments_counter() {
         let mut gd = make_game_data();
-        gd.bombs = 2;
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
             apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0);
         }
-        assert_eq!(gd.bombs, 3);
-        assert_eq!(tracker.bomb_fragments, 0);
-    }
-
-    /// Bomb count must not exceed 3.
-    #[test]
-    fn bomb_count_caps_at_3() {
-        let mut gd = make_game_data();
-        gd.bombs = 3;
-        let mut tracker = FragmentTracker::default();
-        for _ in 0..5 {
-            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0);
-        }
-        assert_eq!(gd.bombs, 3);
+        assert_eq!(gd.bombs, 3, "apply_item must not modify bombs");
+        assert_eq!(tracker.bomb_fragments, 5);
     }
 }
