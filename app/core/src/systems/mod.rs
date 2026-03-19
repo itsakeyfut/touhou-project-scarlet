@@ -1,4 +1,5 @@
 pub mod bullet;
+pub mod cleanup;
 pub mod collision;
 pub mod danmaku;
 pub mod enemy;

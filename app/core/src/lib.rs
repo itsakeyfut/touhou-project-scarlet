@@ -14,8 +14,14 @@ pub mod systems;
 
 pub use components::{
     BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, Enemy,
-    EnemyBullet, EnemyBulletKind, EnemyKind, EnemyMovement, GrazeVisual, InvincibilityTimer,
-    ItemKind, ItemPhysics, Player, PlayerBullet, PlayerStats, ShootTimer,
+    EnemyBullet, EnemyBulletKind, EnemyKind, EnemyMovement, GameSessionEntity, GrazeVisual,
+    InvincibilityTimer, ItemKind, ItemPhysics, Player, PlayerBullet, PlayerStats, ShootTimer,
+};
+pub use config::{
+    EnemyBulletConfig, EnemyBulletConfigHandle, EnemyBulletConfigParams, FodderEnemyConfig,
+    FodderEnemyConfigHandle, FodderEnemyConfigParams, GameRulesConfig, GameRulesConfigHandle,
+    GameRulesConfigParams, PlayerBulletConfig, PlayerBulletConfigHandle, PlayerBulletConfigParams,
+    PlayerConfig, PlayerConfigHandle, PlayerConfigParams, ScarletConfigPlugin,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::{
@@ -26,12 +32,6 @@ pub use game_set::GameSystemSet;
 pub use resources::{
     BOMB_EXTEND_FRAGMENTS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
     SpawnEntry, StageData,
-};
-pub use config::{
-    EnemyBulletConfig, EnemyBulletConfigHandle, EnemyBulletConfigParams, FodderEnemyConfig,
-    FodderEnemyConfigHandle, FodderEnemyConfigParams, GameRulesConfig, GameRulesConfigHandle,
-    GameRulesConfigParams, PlayerBulletConfig, PlayerBulletConfigHandle, PlayerBulletConfigParams,
-    PlayerConfig, PlayerConfigHandle, PlayerConfigParams, ScarletConfigPlugin,
 };
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;
@@ -187,6 +187,13 @@ impl Plugin for ScarletCorePlugin {
         app.add_systems(
             Update,
             systems::loading::wait_for_configs.run_if(in_state(AppState::Loading)),
+        );
+
+        // Session cleanup: despawns all GameSessionEntity entities when
+        // leaving Playing so re-entering starts from a clean world.
+        app.add_systems(
+            OnExit(AppState::Playing),
+            systems::cleanup::cleanup_game_session,
         );
 
         #[cfg(feature = "debug-hitbox")]
