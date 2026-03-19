@@ -86,6 +86,10 @@ impl Plugin for ScarletCorePlugin {
         )
         .add_systems(
             Update,
+            systems::item::item_movement_system.in_set(GameSystemSet::Movement),
+        )
+        .add_systems(
+            Update,
             systems::bullet::despawn_out_of_bounds_system.in_set(GameSystemSet::Cleanup),
         );
 
@@ -106,6 +110,7 @@ impl Plugin for ScarletCorePlugin {
             (
                 systems::collision::handle_player_hit,
                 systems::item::on_enemy_defeated,
+                systems::item::item_collection_system,
             )
                 .in_set(GameSystemSet::GameLogic),
         );

@@ -4,14 +4,33 @@ use crate::{
     components::{
         bullet::DespawnOutOfBounds,
         item::{ItemKind, ItemPhysics},
+        player::{Player, PlayerStats},
     },
     events::EnemyDefeatedEvent,
-    resources::GameData,
+    resources::{
+        FragmentTracker, GameData,
+        fragment::{BOMB_EXTEND_FRAGMENTS, LIFE_EXTEND_FRAGMENTS},
+    },
 };
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+
+/// Speed at which attracted items move toward the player (px/s).
+///
+/// Must exceed the maximum fall speed (`200 px/s`) so attracted items
+/// visibly accelerate upward toward the player.
+pub const ITEM_ATTRACT_SPEED: f32 = 400.0;
+
+/// Maximum downward fall speed for items under gravity (px/s).
+const ITEM_MAX_FALL_SPEED: f32 = -200.0;
+
+/// Radius within which the player collects an item (px).
+///
+/// This is the final pickup threshold; items are attracted at a larger
+/// radius ([`PlayerStats::pickup_radius`]) before being collected here.
+const ITEM_COLLECT_RADIUS: f32 = 8.0;
 
 /// Y coordinate of the "score line" (px above play area centre).
 ///
@@ -112,6 +131,144 @@ pub fn on_enemy_defeated(
     }
 }
 
+/// Moves items each frame according to their [`ItemPhysics`] state.
+///
+/// Two attraction triggers cause an item to switch from falling to tracking
+/// the player:
+///
+/// 1. **Score-line auto-attract** — the player's Y is at or above
+///    [`SCORE_LINE_Y`] (192 px). All on-screen items are pulled in.
+/// 2. **Proximity attract** — the item is within [`PlayerStats::pickup_radius`]
+///    of the player.
+///
+/// Once `attracted` is set to `true` it is never reset; the item continues
+/// homing until collected or despawned.
+///
+/// Items that have not been attracted fall downward under constant acceleration
+/// (`fall_speed`) up to a terminal velocity of [`ITEM_MAX_FALL_SPEED`].
+///
+/// Registered in [`crate::GameSystemSet::Movement`].
+#[allow(clippy::type_complexity)]
+pub fn item_movement_system(
+    mut items: Query<(&mut Transform, &mut ItemPhysics)>,
+    player: Query<(&Transform, &PlayerStats), (With<Player>, Without<ItemPhysics>)>,
+    time: Res<Time>,
+) {
+    let dt = time.delta_secs();
+
+    let (player_pos, auto_attract, pickup_radius) = if let Ok((player_tf, stats)) = player.single()
+    {
+        let pos = player_tf.translation.truncate();
+        (pos, pos.y >= SCORE_LINE_Y, stats.pickup_radius)
+    } else {
+        return;
+    };
+
+    for (mut tf, mut physics) in &mut items {
+        let item_pos = tf.translation.truncate();
+
+        if physics.attracted || auto_attract || item_pos.distance(player_pos) <= pickup_radius {
+            // Switch to attracted mode and home toward the player.
+            physics.attracted = true;
+            let dir = (player_pos - item_pos).normalize_or(Vec2::Y);
+            physics.velocity = dir * ITEM_ATTRACT_SPEED;
+        } else {
+            // Apply gravity: accelerate downward, cap at terminal velocity.
+            physics.velocity.y =
+                (physics.velocity.y - physics.fall_speed * dt).max(ITEM_MAX_FALL_SPEED);
+        }
+
+        tf.translation += (physics.velocity * dt).extend(0.0);
+    }
+}
+
+/// Collects items that overlap the player and applies their effects.
+///
+/// An item is collected when the distance between its centre and the player
+/// is ≤ [`ITEM_COLLECT_RADIUS`]. On collection:
+///
+/// - The appropriate effect is applied via [`apply_item`].
+/// - The item entity is despawned.
+///
+/// Effects per [`ItemKind`]:
+///
+/// | Variant | Effect |
+/// |---|---|
+/// | `PowerSmall` | `power += 1` (max 128) |
+/// | `PowerLarge` | `power += 8` (max 128) |
+/// | `FullPower`  | `power = 128` |
+/// | `PointItem`  | `score += calc_point_item_value(player_y)` |
+/// | `LifeFragment` | fragment counter +1; at 5 → `lives += 1`, counter reset |
+/// | `BombFragment` | fragment counter +1; at 5 → `bombs = (bombs+1).min(3)`, counter reset |
+///
+/// Registered in [`crate::GameSystemSet::GameLogic`].
+pub fn item_collection_system(
+    mut commands: Commands,
+    items: Query<(Entity, &Transform, &ItemKind)>,
+    player: Query<(&Transform, &PlayerStats), With<Player>>,
+    mut game_data: ResMut<GameData>,
+    mut tracker: ResMut<FragmentTracker>,
+) {
+    let Ok((player_tf, stats)) = player.single() else {
+        return;
+    };
+    let player_pos = player_tf.translation.truncate();
+    let player_y = player_tf.translation.y;
+
+    // Use the larger of hitbox_radius and ITEM_COLLECT_RADIUS so the pickup
+    // zone always covers at least the defined constant.
+    let collect_radius = ITEM_COLLECT_RADIUS.max(stats.hitbox_radius);
+
+    for (entity, tf, &kind) in &items {
+        let item_pos = tf.translation.truncate();
+        if item_pos.distance(player_pos) > collect_radius {
+            continue;
+        }
+        apply_item(&mut game_data, &mut tracker, kind, player_y);
+        commands.entity(entity).despawn();
+    }
+}
+
+/// Applies the gameplay effect of collecting an item and returns the score awarded.
+///
+/// Called by [`item_collection_system`] for each collected item.
+fn apply_item(
+    game_data: &mut GameData,
+    tracker: &mut FragmentTracker,
+    kind: ItemKind,
+    player_y: f32,
+) {
+    match kind {
+        ItemKind::PowerSmall => {
+            game_data.power = game_data.power.saturating_add(1).min(128);
+        }
+        ItemKind::PowerLarge => {
+            game_data.power = game_data.power.saturating_add(8).min(128);
+        }
+        ItemKind::FullPower => {
+            game_data.power = 128;
+        }
+        ItemKind::PointItem => {
+            let value = calc_point_item_value(player_y);
+            game_data.score += value as u64;
+        }
+        ItemKind::LifeFragment => {
+            tracker.life_fragments += 1;
+            if tracker.life_fragments >= LIFE_EXTEND_FRAGMENTS {
+                tracker.life_fragments = 0;
+                game_data.lives = game_data.lives.saturating_add(1);
+            }
+        }
+        ItemKind::BombFragment => {
+            tracker.bomb_fragments += 1;
+            if tracker.bomb_fragments >= BOMB_EXTEND_FRAGMENTS {
+                tracker.bomb_fragments = 0;
+                game_data.bombs = game_data.bombs.saturating_add(1).min(3);
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Score calculation
 // ---------------------------------------------------------------------------
@@ -205,5 +362,114 @@ mod tests {
                 pair[1]
             );
         }
+    }
+
+    // ---- apply_item ---------------------------------------------------------
+
+    fn make_game_data() -> GameData {
+        GameData {
+            score: 0,
+            hi_score: 0,
+            lives: 2,
+            bombs: 3,
+            power: 0,
+            graze: 0,
+        }
+    }
+
+    /// PowerSmall must add exactly 1 power.
+    #[test]
+    fn power_small_adds_one() {
+        let mut gd = make_game_data();
+        let mut tracker = FragmentTracker::default();
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerSmall, 0.0);
+        assert_eq!(gd.power, 1);
+    }
+
+    /// PowerLarge must add exactly 8 power.
+    #[test]
+    fn power_large_adds_eight() {
+        let mut gd = make_game_data();
+        let mut tracker = FragmentTracker::default();
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0);
+        assert_eq!(gd.power, 8);
+    }
+
+    /// Power must not exceed 128.
+    #[test]
+    fn power_caps_at_128() {
+        let mut gd = make_game_data();
+        gd.power = 127;
+        let mut tracker = FragmentTracker::default();
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0);
+        assert_eq!(gd.power, 128);
+    }
+
+    /// FullPower must set power to exactly 128 regardless of current value.
+    #[test]
+    fn full_power_sets_max() {
+        let mut gd = make_game_data();
+        gd.power = 50;
+        let mut tracker = FragmentTracker::default();
+        apply_item(&mut gd, &mut tracker, ItemKind::FullPower, 0.0);
+        assert_eq!(gd.power, 128);
+    }
+
+    /// PointItem at score line must add POI_BASE_VALUE to score.
+    #[test]
+    fn point_item_at_score_line_awards_max_score() {
+        let mut gd = make_game_data();
+        let mut tracker = FragmentTracker::default();
+        apply_item(&mut gd, &mut tracker, ItemKind::PointItem, SCORE_LINE_Y);
+        assert_eq!(gd.score, POI_BASE_VALUE as u64);
+    }
+
+    /// Four LifeFragments must not grant an extra life.
+    #[test]
+    fn four_life_fragments_do_not_extend() {
+        let mut gd = make_game_data();
+        let mut tracker = FragmentTracker::default();
+        for _ in 0..4 {
+            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
+        }
+        assert_eq!(gd.lives, 2);
+        assert_eq!(tracker.life_fragments, 4);
+    }
+
+    /// Five LifeFragments must grant one extra life and reset the counter.
+    #[test]
+    fn five_life_fragments_grant_extend() {
+        let mut gd = make_game_data();
+        let mut tracker = FragmentTracker::default();
+        for _ in 0..5 {
+            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
+        }
+        assert_eq!(gd.lives, 3);
+        assert_eq!(tracker.life_fragments, 0);
+    }
+
+    /// Five BombFragments must grant one extra bomb (max 3) and reset counter.
+    #[test]
+    fn five_bomb_fragments_grant_extend() {
+        let mut gd = make_game_data();
+        gd.bombs = 2;
+        let mut tracker = FragmentTracker::default();
+        for _ in 0..5 {
+            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0);
+        }
+        assert_eq!(gd.bombs, 3);
+        assert_eq!(tracker.bomb_fragments, 0);
+    }
+
+    /// Bomb count must not exceed 3.
+    #[test]
+    fn bomb_count_caps_at_3() {
+        let mut gd = make_game_data();
+        gd.bombs = 3;
+        let mut tracker = FragmentTracker::default();
+        for _ in 0..5 {
+            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0);
+        }
+        assert_eq!(gd.bombs, 3);
     }
 }
