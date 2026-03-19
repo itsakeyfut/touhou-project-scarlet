@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     components::{
+        GameSessionEntity,
         bullet::ShootTimer,
         player::{InvincibilityTimer, Player, PlayerStats},
     },
@@ -29,10 +30,7 @@ pub fn spawn_player(mut commands: Commands, player_cfg: PlayerConfigParams) {
             pickup_radius: player_cfg.pickup_radius(),
         },
         ShootTimer {
-            timer: Timer::from_seconds(
-                player_cfg.shoot_interval_secs(),
-                TimerMode::Repeating,
-            ),
+            timer: Timer::from_seconds(player_cfg.shoot_interval_secs(), TimerMode::Repeating),
         },
         Sprite {
             color: Color::srgb(1.0, 0.3, 0.3),
@@ -40,6 +38,7 @@ pub fn spawn_player(mut commands: Commands, player_cfg: PlayerConfigParams) {
             ..default()
         },
         Transform::from_xyz(0.0, -PLAY_AREA_HALF_H + 60.0, 1.0),
+        GameSessionEntity,
     ));
 }
 

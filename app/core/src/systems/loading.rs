@@ -37,6 +37,7 @@ const WARN_INTERVAL_SECS: f32 = 5.0;
 ///
 /// Registered in [`crate::ScarletCorePlugin`] via
 /// `Update, run_if(in_state(AppState::Loading))`.
+#[allow(clippy::too_many_arguments)]
 pub fn wait_for_configs(
     player_cfg: PlayerConfigParams,
     game_rules_cfg: GameRulesConfigParams,

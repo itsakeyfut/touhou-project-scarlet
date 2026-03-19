@@ -2,14 +2,12 @@ use bevy::prelude::*;
 
 use crate::{
     components::{
+        GameSessionEntity,
         bullet::DespawnOutOfBounds,
         item::{ItemKind, ItemPhysics},
         player::{Player, PlayerStats},
     },
-    config::{
-        game_rules::{DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE, DEFAULT_SCORE_LINE_Y},
-        GameRulesConfigParams,
-    },
+    config::GameRulesConfigParams,
     events::EnemyDefeatedEvent,
     resources::{FragmentTracker, GameData},
 };
@@ -27,6 +25,8 @@ use crate::{
 /// - [`Transform`] — positioned at `pos` with a fixed Z of `1.2` (above the
 ///   play field but below bullets at Z `1.5`).
 /// - [`DespawnOutOfBounds`] — automatically removed when it falls off-screen.
+/// - [`GameSessionEntity`] — marks this entity for unified despawn when
+///   leaving [`crate::states::AppState::Playing`].
 pub fn spawn_item(commands: &mut Commands, pos: Vec2, kind: ItemKind) {
     commands.spawn((
         kind,
@@ -38,6 +38,7 @@ pub fn spawn_item(commands: &mut Commands, pos: Vec2, kind: ItemKind) {
         },
         Transform::from_translation(pos.extend(1.2)),
         DespawnOutOfBounds,
+        GameSessionEntity,
     ));
 }
 
@@ -162,8 +163,7 @@ pub fn item_movement_system(
             }
         } else {
             // Apply gravity: accelerate downward, cap at terminal velocity.
-            physics.velocity.y =
-                (physics.velocity.y - physics.fall_speed * dt).max(max_fall_speed);
+            physics.velocity.y = (physics.velocity.y - physics.fall_speed * dt).max(max_fall_speed);
         }
 
         tf.translation += (physics.velocity * dt).extend(0.0);
@@ -314,6 +314,9 @@ pub fn calc_point_item_value(player_y: f32, score_line_y: f32, poi_base: u32, po
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::game_rules::{
+        DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE, DEFAULT_SCORE_LINE_Y,
+    };
 
     // ---- calc_point_item_value -------------------------------------------
 
@@ -356,8 +359,14 @@ mod tests {
     fn point_item_at_midpoint_is_between_min_and_max() {
         let mid = (-224.0 + DEFAULT_SCORE_LINE_Y) / 2.0;
         let v = poi(mid);
-        assert!(v > DEFAULT_POI_MIN_VALUE, "midpoint value should exceed minimum");
-        assert!(v < DEFAULT_POI_BASE_VALUE, "midpoint value should be below maximum");
+        assert!(
+            v > DEFAULT_POI_MIN_VALUE,
+            "midpoint value should exceed minimum"
+        );
+        assert!(
+            v < DEFAULT_POI_BASE_VALUE,
+            "midpoint value should be below maximum"
+        );
     }
 
     /// The value must be monotonically non-decreasing as Y increases toward the
@@ -394,7 +403,15 @@ mod tests {
     fn power_small_adds_one() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerSmall, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
+        apply_item(
+            &mut gd,
+            &mut tracker,
+            ItemKind::PowerSmall,
+            0.0,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
+        );
         assert_eq!(gd.power, 1);
     }
 
@@ -403,7 +420,15 @@ mod tests {
     fn power_large_adds_eight() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
+        apply_item(
+            &mut gd,
+            &mut tracker,
+            ItemKind::PowerLarge,
+            0.0,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
+        );
         assert_eq!(gd.power, 8);
     }
 
@@ -413,7 +438,15 @@ mod tests {
         let mut gd = make_game_data();
         gd.power = 127;
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
+        apply_item(
+            &mut gd,
+            &mut tracker,
+            ItemKind::PowerLarge,
+            0.0,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
+        );
         assert_eq!(gd.power, 128);
     }
 
@@ -423,7 +456,15 @@ mod tests {
         let mut gd = make_game_data();
         gd.power = 50;
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::FullPower, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
+        apply_item(
+            &mut gd,
+            &mut tracker,
+            ItemKind::FullPower,
+            0.0,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
+        );
         assert_eq!(gd.power, 128);
     }
 
@@ -451,7 +492,15 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..4 {
-            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
+            apply_item(
+                &mut gd,
+                &mut tracker,
+                ItemKind::LifeFragment,
+                0.0,
+                DEFAULT_SCORE_LINE_Y,
+                DEFAULT_POI_BASE_VALUE,
+                DEFAULT_POI_MIN_VALUE,
+            );
         }
         assert_eq!(gd.lives, 2, "apply_item must not extend lives");
         assert_eq!(tracker.life_fragments, 4);
@@ -464,7 +513,15 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
-            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
+            apply_item(
+                &mut gd,
+                &mut tracker,
+                ItemKind::LifeFragment,
+                0.0,
+                DEFAULT_SCORE_LINE_Y,
+                DEFAULT_POI_BASE_VALUE,
+                DEFAULT_POI_MIN_VALUE,
+            );
         }
         assert_eq!(gd.lives, 2, "apply_item must not extend lives");
         assert_eq!(tracker.life_fragments, 5);
@@ -477,7 +534,15 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
-            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
+            apply_item(
+                &mut gd,
+                &mut tracker,
+                ItemKind::BombFragment,
+                0.0,
+                DEFAULT_SCORE_LINE_Y,
+                DEFAULT_POI_BASE_VALUE,
+                DEFAULT_POI_MIN_VALUE,
+            );
         }
         assert_eq!(gd.bombs, 3, "apply_item must not modify bombs");
         assert_eq!(tracker.bomb_fragments, 5);

@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::{bullet::BulletPattern, enemy::Enemy},
+    components::{GameSessionEntity, bullet::BulletPattern, enemy::Enemy},
     config::FodderEnemyConfigParams,
     resources::{EnemySpawner, SpawnEntry, StageData},
     systems::danmaku::emitter::SpiralState,
@@ -78,6 +78,7 @@ fn spawn_enemy(commands: &mut Commands, entry: &SpawnEntry, fodder_cfg: &FodderE
             ..default()
         },
         Transform::from_translation(entry.position.extend(1.0)),
+        GameSessionEntity,
     ));
 
     if let Some(emitter) = entry.emitter.clone() {

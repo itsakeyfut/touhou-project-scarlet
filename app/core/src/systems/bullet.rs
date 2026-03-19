@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::bullet::{BulletVelocity, DespawnOutOfBounds, PlayerBullet},
+    components::{
+        GameSessionEntity,
+        bullet::{BulletVelocity, DespawnOutOfBounds, PlayerBullet},
+    },
     config::PlayerBulletConfigParams,
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
     events::ShootEvent,
@@ -127,6 +130,7 @@ fn spawn_bullet_stream(
                 (origin + Vec2::new(x_offset, origin_y_offset)).extend(2.0),
             ),
             DespawnOutOfBounds,
+            GameSessionEntity,
         ));
     }
 }

@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::bullet::{
-        BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind,
+    components::{
+        GameSessionEntity,
+        bullet::{BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet, EnemyBulletKind},
     },
     shaders::{BulletGlowMaterial, BulletTrailMaterial},
 };
@@ -193,6 +194,7 @@ pub(super) fn spawn_enemy_bullet(
             MeshMaterial2d(glow_mat),
             Transform::from_translation(origin.extend(1.5)),
             DespawnOutOfBounds,
+            GameSessionEntity,
         ))
         .with_children(|parent| {
             parent.spawn((
