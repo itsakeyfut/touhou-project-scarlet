@@ -154,7 +154,7 @@ pub enum BulletPattern {
 ///
 /// The emitter ticks its `timer` every frame; when the timer fires it
 /// delegates to the appropriate pattern emit function.
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct BulletEmitter {
     /// Firing pattern for this emitter.
     pub pattern: BulletPattern,

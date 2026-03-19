@@ -71,6 +71,17 @@ pub struct ExtendEvent {
     pub kind: ExtendKind,
 }
 
+/// Fired when all normal enemies are defeated and the spawner script is
+/// exhausted, signalling that it is time to spawn the stage boss.
+///
+/// Emitted by [`crate::systems::stage::stage_control_system`] and consumed
+/// by the boss-spawn system added in Phase 08.
+#[derive(Event, Message)]
+pub struct BossSpawnEvent {
+    /// The stage number for which the boss should be spawned.
+    pub stage_number: u8,
+}
+
 /// Fired when an enemy bullet newly enters the player's graze zone (16 px).
 ///
 /// Consumed by [`crate::shaders::plugin::update_graze_material`] to trigger
