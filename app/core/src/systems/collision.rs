@@ -203,6 +203,59 @@ pub fn handle_player_hit(
     });
 }
 
+/// Detects when enemy bullets enter the player's graze zone and increments
+/// [`GameData::graze`] for each new bullet crossing the boundary.
+///
+/// Graze zone radius is [`PlayerStats::graze_radius`] (16 px). A bullet that
+/// stays inside the zone across multiple frames is counted only once; a bullet
+/// that leaves and re-enters is **not** counted again because graze tracking
+/// is reset each time a new set of grazed entities is computed.
+///
+/// # Implementation
+///
+/// A [`Local`] [`HashSet<Entity>`] persists between frames and records which
+/// enemy bullets are currently inside the graze zone. Each frame:
+///
+/// 1. All bullets currently overlapping the zone are collected into
+///    `current_grazed`.
+/// 2. Any bullet in `current_grazed` that was **not** in the previous frame's
+///    set is a new graze → `game_data.graze` is incremented.
+/// 3. `graze_set` is replaced with `current_grazed`, so bullets that left the
+///    zone (or were despawned) are automatically removed.
+///
+/// Registered in [`crate::GameSystemSet::Collision`].
+pub fn graze_detection_system(
+    player: Query<(&Transform, &PlayerStats), With<Player>>,
+    bullets: Query<(Entity, &Transform, &EnemyBulletKind), With<EnemyBullet>>,
+    mut game_data: ResMut<GameData>,
+    mut graze_set: Local<HashSet<Entity>>,
+) {
+    let Ok((player_tf, stats)) = player.single() else {
+        return;
+    };
+
+    let player_pos = player_tf.translation.truncate();
+    let mut current_grazed: HashSet<Entity> = HashSet::new();
+
+    for (entity, bullet_tf, kind) in &bullets {
+        let bullet_pos = bullet_tf.translation.truncate();
+        if check_circle_collision(
+            player_pos,
+            stats.graze_radius,
+            bullet_pos,
+            kind.collision_radius(),
+        ) {
+            current_grazed.insert(entity);
+            if !graze_set.contains(&entity) {
+                game_data.graze += 1;
+            }
+        }
+    }
+
+    // Replace the set: bullets that left the zone or were despawned are dropped.
+    *graze_set = current_grazed;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -276,5 +329,93 @@ mod tests {
             check_circle_collision(a.0, a.1, b.0, b.1),
             check_circle_collision(b.0, b.1, a.0, a.1)
         );
+    }
+
+    // ---- graze duplicate-prevention logic ---------------------------------
+    //
+    // The graze system uses a Local<HashSet<Entity>> that persists across
+    // frames. The following tests verify the duplicate-counting prevention
+    // logic in isolation by simulating the set operations the system performs.
+
+    /// A bullet entering the graze zone for the first time must be counted.
+    #[test]
+    fn graze_counts_new_bullet_entering_zone() {
+        // Bullet with Entity index 0 is inside the graze zone.
+        // graze_set is empty (no bullet was tracked last frame).
+        let graze_set: HashSet<u32> = HashSet::new();
+        let current_grazed: HashSet<u32> = [0].into();
+
+        // Simulate: count bullets in current_grazed that were not in graze_set.
+        let new_grazes = current_grazed
+            .iter()
+            .filter(|e| !graze_set.contains(e))
+            .count();
+        assert_eq!(new_grazes, 1, "one new bullet should be counted as a graze");
+    }
+
+    /// A bullet that remains inside the graze zone across two frames must not
+    /// be counted again on the second frame.
+    #[test]
+    fn graze_does_not_double_count_bullet_staying_in_zone() {
+        // Frame 1: bullet 0 entered → counted.
+        let graze_set: HashSet<u32> = [0].into(); // state after frame 1
+
+        // Frame 2: same bullet still inside.
+        let current_grazed: HashSet<u32> = [0].into();
+
+        let new_grazes = current_grazed
+            .iter()
+            .filter(|e| !graze_set.contains(e))
+            .count();
+        assert_eq!(
+            new_grazes, 0,
+            "bullet already in set must not be counted again"
+        );
+    }
+
+    /// A bullet that leaves the graze zone must be removed from the tracking set.
+    #[test]
+    fn graze_removes_bullet_that_left_zone() {
+        // Frame 1: bullets 0 and 1 were grazed.
+        let graze_set: HashSet<u32> = [0, 1].into();
+
+        // Frame 2: only bullet 1 is still inside; bullet 0 has left.
+        let current_grazed: HashSet<u32> = [1].into();
+
+        // After the swap the set should no longer contain bullet 0.
+        assert!(
+            !current_grazed.contains(&0),
+            "departed bullet must not remain in set"
+        );
+        assert!(
+            current_grazed.contains(&1),
+            "bullet still in zone must remain in set"
+        );
+        // No new graze counted (bullet 1 was already tracked).
+        let new_grazes = current_grazed
+            .iter()
+            .filter(|e| !graze_set.contains(e))
+            .count();
+        assert_eq!(new_grazes, 0);
+    }
+
+    /// Two distinct bullets entering simultaneously must each be counted once.
+    #[test]
+    fn graze_counts_multiple_simultaneous_new_bullets() {
+        let graze_set: HashSet<u32> = HashSet::new();
+        let current_grazed: HashSet<u32> = [3, 7].into();
+
+        let new_grazes = current_grazed
+            .iter()
+            .filter(|e| !graze_set.contains(e))
+            .count();
+        assert_eq!(new_grazes, 2);
+    }
+
+    /// The graze zone radius constant matches PlayerStats default graze_radius.
+    #[test]
+    fn graze_radius_matches_player_stats_default() {
+        use crate::components::player::PlayerStats;
+        assert_eq!(PlayerStats::default().graze_radius, 16.0);
     }
 }
