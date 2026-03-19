@@ -19,19 +19,20 @@ use crate::{
 /// Uses a placeholder colored rectangle until real sprites are added in Phase 19.
 /// [`ShootTimer`] is attached here so the firing rate is tracked per-player.
 pub fn spawn_player(mut commands: Commands, player_cfg: PlayerConfigParams) {
-    let cfg = player_cfg.get_or_default();
-
     commands.spawn((
         Player,
         PlayerStats {
-            speed: cfg.speed,
-            slow_speed: cfg.slow_speed,
-            hitbox_radius: cfg.hitbox_radius,
-            graze_radius: cfg.graze_radius,
-            pickup_radius: cfg.pickup_radius,
+            speed: player_cfg.speed(),
+            slow_speed: player_cfg.slow_speed(),
+            hitbox_radius: player_cfg.hitbox_radius(),
+            graze_radius: player_cfg.graze_radius(),
+            pickup_radius: player_cfg.pickup_radius(),
         },
         ShootTimer {
-            timer: Timer::from_seconds(cfg.shoot_interval_secs, TimerMode::Repeating),
+            timer: Timer::from_seconds(
+                player_cfg.shoot_interval_secs(),
+                TimerMode::Repeating,
+            ),
         },
         Sprite {
             color: Color::srgb(1.0, 0.3, 0.3),

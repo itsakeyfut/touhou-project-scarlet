@@ -36,12 +36,7 @@ pub fn check_extend_system(
     mut extend_events: MessageWriter<ExtendEvent>,
     rules: GameRulesConfigParams,
 ) {
-    let cfg = rules.get_or_default();
-    let life_threshold = cfg.life_extend_fragments;
-    let bomb_threshold = cfg.bomb_extend_fragments;
-    let max_bombs = cfg.max_bombs;
-
-    if tracker.life_fragments >= life_threshold {
+    if tracker.life_fragments >= rules.life_extend_fragments() {
         tracker.life_fragments = 0;
         game_data.lives = game_data.lives.saturating_add(1);
         extend_events.write(ExtendEvent {
@@ -49,9 +44,9 @@ pub fn check_extend_system(
         });
     }
 
-    if tracker.bomb_fragments >= bomb_threshold {
+    if tracker.bomb_fragments >= rules.bomb_extend_fragments() {
         tracker.bomb_fragments = 0;
-        game_data.bombs = game_data.bombs.saturating_add(1).min(max_bombs);
+        game_data.bombs = game_data.bombs.saturating_add(1).min(rules.max_bombs());
         extend_events.write(ExtendEvent {
             kind: ExtendKind::Bomb,
         });

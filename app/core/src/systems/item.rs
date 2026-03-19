@@ -7,10 +7,7 @@ use crate::{
         player::{Player, PlayerStats},
     },
     config::{
-        game_rules::{
-            DEFAULT_ITEM_COLLECT_RADIUS, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE,
-            DEFAULT_SCORE_LINE_Y,
-        },
+        game_rules::{DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE, DEFAULT_SCORE_LINE_Y},
         GameRulesConfigParams,
     },
     events::EnemyDefeatedEvent,
@@ -131,10 +128,9 @@ pub fn item_movement_system(
 ) {
     let dt = time.delta_secs();
 
-    let cfg = rules.get_or_default();
-    let attract_speed = cfg.item_attract_speed;
-    let max_fall_speed = cfg.item_max_fall_speed;
-    let score_line_y = cfg.score_line_y;
+    let attract_speed = rules.item_attract_speed();
+    let max_fall_speed = rules.item_max_fall_speed();
+    let score_line_y = rules.score_line_y();
 
     let (player_pos, auto_attract, pickup_radius) = if let Ok((player_tf, stats)) = player.single()
     {
@@ -209,10 +205,7 @@ pub fn item_collection_system(
     let player_pos = player_tf.translation.truncate();
     let player_y = player_tf.translation.y;
 
-    let item_collect_radius = rules
-        .get()
-        .map(|c| c.item_collect_radius)
-        .unwrap_or(DEFAULT_ITEM_COLLECT_RADIUS);
+    let item_collect_radius = rules.item_collect_radius();
 
     // Use the larger of hitbox_radius and item_collect_radius so the pickup
     // zone always covers at least the defined minimum.

@@ -25,21 +25,23 @@ use bevy::asset::{AssetLoader, LoadContext};
 use bevy::prelude::*;
 
 // ---------------------------------------------------------------------------
-// RON asset loader macro
+// RON asset loader macro (two-step: Partial → Asset via From)
 // ---------------------------------------------------------------------------
 
 /// Generates a RON-based [`AssetLoader`] implementation for a config type.
 ///
-/// All game config assets use identical loading logic (`read bytes →
-/// ron::de::from_bytes`), so this macro eliminates repetition while keeping
-/// each loader a distinct named type (required by Bevy's type system).
+/// Uses the two-step deserialization form: RON bytes are first parsed into a
+/// `$partial` type (all fields `Option<T>` with `#[serde(default)]`), then
+/// converted to `$asset` via `From`.  Missing fields in the RON file are
+/// caught in `From::from` and logged as `warn!` messages, so the game
+/// continues with fallback values instead of panicking.
 ///
 /// # Usage
 /// ```ignore
-/// ron_asset_loader!(MyConfigLoader, MyConfig);
+/// ron_asset_loader!(MyConfigLoader, MyConfigPartial => MyConfig);
 /// ```
 macro_rules! ron_asset_loader {
-    ($loader:ident, $asset:ty) => {
+    ($loader:ident, $partial:ty => $asset:ty) => {
         #[derive(Default)]
         struct $loader;
 
@@ -56,8 +58,12 @@ macro_rules! ron_asset_loader {
             ) -> Result<Self::Asset, Self::Error> {
                 let mut bytes = Vec::new();
                 reader.read_to_end(&mut bytes).await?;
-                ron::de::from_bytes(&bytes)
-                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+                let options = ron::Options::default()
+                    .with_default_extension(ron::extensions::Extensions::IMPLICIT_SOME);
+                let partial: $partial = options
+                    .from_bytes(&bytes)
+                    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+                Ok(<$asset>::from(partial))
             }
 
             fn extensions(&self) -> &[&str] {
@@ -67,8 +73,8 @@ macro_rules! ron_asset_loader {
     };
 }
 
-ron_asset_loader!(PlayerConfigLoader, PlayerConfig);
-ron_asset_loader!(GameRulesConfigLoader, GameRulesConfig);
+ron_asset_loader!(PlayerConfigLoader, player::PlayerConfigPartial => PlayerConfig);
+ron_asset_loader!(GameRulesConfigLoader, game_rules::GameRulesConfigPartial => GameRulesConfig);
 
 // ---------------------------------------------------------------------------
 // Plugin
