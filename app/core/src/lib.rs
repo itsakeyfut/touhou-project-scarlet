@@ -46,6 +46,10 @@ pub struct ScarletCorePlugin;
 
 impl Plugin for ScarletCorePlugin {
     fn build(&self, app: &mut App) {
+        // Config plugin must be registered first so asset loaders and handles
+        // are available before any system tries to access them.
+        app.add_plugins(config::ScarletConfigPlugin);
+
         app.add_plugins(shaders::ScarletShadersPlugin);
 
         app.init_state::<AppState>();

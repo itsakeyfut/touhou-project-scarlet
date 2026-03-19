@@ -8,7 +8,7 @@ use crate::{
         enemy::Enemy,
         player::{InvincibilityTimer, Player, PlayerStats},
     },
-    config::{EnemyBulletConfigParams, PlayerBulletConfigParams},
+    config::{EnemyBulletConfigParams, PlayerBulletConfigParams, PlayerConfigParams},
     constants::PLAY_AREA_HALF_H,
     events::{EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
     resources::GameData,
@@ -178,6 +178,7 @@ pub fn handle_player_hit(
     mut game_data: ResMut<GameData>,
     mut player: Query<(Entity, &mut Transform), With<Player>>,
     mut next_state: ResMut<NextState<AppState>>,
+    player_cfg: PlayerConfigParams,
 ) {
     // Only react to the first event per frame.
     let Some(_event) = hit_events.read().next() else {
@@ -202,9 +203,9 @@ pub fn handle_player_hit(
     // Reset the player to the standard spawn position.
     transform.translation = Vec3::new(0.0, -PLAY_AREA_HALF_H + 60.0, 1.0);
 
-    // Start the 3-second invincibility window.
+    // Start the invincibility window (duration from player.ron).
     commands.entity(player_entity).insert(InvincibilityTimer {
-        timer: Timer::from_seconds(3.0, TimerMode::Once),
+        timer: Timer::from_seconds(player_cfg.invincibility_secs(), TimerMode::Once),
     });
 }
 

@@ -216,7 +216,15 @@ pub fn item_collection_system(
         if item_pos.distance(player_pos) > collect_radius {
             continue;
         }
-        apply_item(&mut game_data, &mut tracker, kind, player_y);
+        apply_item(
+            &mut game_data,
+            &mut tracker,
+            kind,
+            player_y,
+            rules.score_line_y(),
+            rules.poi_base_value(),
+            rules.poi_min_value(),
+        );
         commands.entity(entity).despawn();
     }
 }
@@ -229,6 +237,9 @@ fn apply_item(
     tracker: &mut FragmentTracker,
     kind: ItemKind,
     player_y: f32,
+    score_line_y: f32,
+    poi_base: u32,
+    poi_min: u32,
 ) {
     match kind {
         ItemKind::PowerSmall => {
@@ -241,7 +252,7 @@ fn apply_item(
             game_data.power = 128;
         }
         ItemKind::PointItem => {
-            let value = calc_point_item_value(player_y);
+            let value = calc_point_item_value(player_y, score_line_y, poi_base, poi_min);
             game_data.score += value as u64;
         }
         ItemKind::LifeFragment => {
@@ -258,17 +269,21 @@ fn apply_item(
 // ---------------------------------------------------------------------------
 
 /// Calculates the score value of a [`ItemKind::PointItem`] based on the
-/// player's current Y position.
+/// player's current Y position and the runtime score parameters.
 ///
-/// Returns 10 000 when the player is at or above the score line (192 px),
-/// and linearly interpolates down to 100 at the bottom of the play area.
+/// Returns `poi_base` when the player is at or above `score_line_y`,
+/// and linearly interpolates down to `poi_min` at the bottom of the play area.
 ///
-/// The thresholds match the defaults in `assets/config/game_rules.ron`
-/// and can be tuned there without recompiling.
+/// Callers should obtain `score_line_y`, `poi_base`, and `poi_min` from
+/// [`crate::config::GameRulesConfigParams`] so hot-reloaded changes in
+/// `assets/config/game_rules.ron` are reflected at runtime.
 ///
 /// # Arguments
 ///
-/// * `player_y` — the player's world-space Y coordinate.
+/// * `player_y`     — the player's world-space Y coordinate.
+/// * `score_line_y` — Y threshold above which the maximum value is awarded.
+/// * `poi_base`     — score awarded at or above the score line.
+/// * `poi_min`      — score awarded at the bottom of the play area.
 ///
 /// # Examples
 ///
@@ -276,24 +291,24 @@ fn apply_item(
 /// use scarlet_core::systems::item::calc_point_item_value;
 ///
 /// // At the score line → maximum value.
-/// assert_eq!(calc_point_item_value(192.0), 10_000);
+/// assert_eq!(calc_point_item_value(192.0, 192.0, 10_000, 100), 10_000);
 /// // Below play area bottom → minimum value.
-/// assert_eq!(calc_point_item_value(-500.0), 100);
+/// assert_eq!(calc_point_item_value(-500.0, 192.0, 10_000, 100), 100);
 /// ```
-pub fn calc_point_item_value(player_y: f32) -> u32 {
+pub fn calc_point_item_value(player_y: f32, score_line_y: f32, poi_base: u32, poi_min: u32) -> u32 {
     // At or above the score line → always maximum.
-    if player_y >= DEFAULT_SCORE_LINE_Y {
-        return DEFAULT_POI_BASE_VALUE;
+    if player_y >= score_line_y {
+        return poi_base;
     }
 
     // Linear interpolation between the bottom of the play area and the score
     // line.  The bottom of the play area is -PLAY_AREA_HALF_H (= -224).
     const PLAY_AREA_BOTTOM: f32 = -224.0;
-    let range = DEFAULT_SCORE_LINE_Y - PLAY_AREA_BOTTOM; // 416
+    let range = score_line_y - PLAY_AREA_BOTTOM;
     let t = ((player_y - PLAY_AREA_BOTTOM) / range).clamp(0.0, 1.0);
 
-    let span = (DEFAULT_POI_BASE_VALUE - DEFAULT_POI_MIN_VALUE) as f32;
-    (DEFAULT_POI_MIN_VALUE as f32 + span * t) as u32
+    let span = (poi_base - poi_min) as f32;
+    (poi_min as f32 + span * t) as u32
 }
 
 #[cfg(test)]
@@ -302,34 +317,37 @@ mod tests {
 
     // ---- calc_point_item_value -------------------------------------------
 
+    fn poi(player_y: f32) -> u32 {
+        calc_point_item_value(
+            player_y,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
+        )
+    }
+
     /// At the score line the maximum value must be returned.
     #[test]
     fn point_item_at_score_line_gives_max() {
-        assert_eq!(
-            calc_point_item_value(DEFAULT_SCORE_LINE_Y),
-            DEFAULT_POI_BASE_VALUE
-        );
+        assert_eq!(poi(DEFAULT_SCORE_LINE_Y), DEFAULT_POI_BASE_VALUE);
     }
 
     /// Above the score line must also give the maximum value.
     #[test]
     fn point_item_above_score_line_gives_max() {
-        assert_eq!(
-            calc_point_item_value(DEFAULT_SCORE_LINE_Y + 50.0),
-            DEFAULT_POI_BASE_VALUE
-        );
+        assert_eq!(poi(DEFAULT_SCORE_LINE_Y + 50.0), DEFAULT_POI_BASE_VALUE);
     }
 
     /// At the very bottom of the play area the minimum value must be returned.
     #[test]
     fn point_item_at_bottom_gives_min() {
-        assert_eq!(calc_point_item_value(-224.0), DEFAULT_POI_MIN_VALUE);
+        assert_eq!(poi(-224.0), DEFAULT_POI_MIN_VALUE);
     }
 
     /// A Y position below the play area must clamp to the minimum value.
     #[test]
     fn point_item_below_play_area_clamps_to_min() {
-        assert_eq!(calc_point_item_value(-500.0), DEFAULT_POI_MIN_VALUE);
+        assert_eq!(poi(-500.0), DEFAULT_POI_MIN_VALUE);
     }
 
     /// The value at the midpoint between the bottom and the score line must be
@@ -337,7 +355,7 @@ mod tests {
     #[test]
     fn point_item_at_midpoint_is_between_min_and_max() {
         let mid = (-224.0 + DEFAULT_SCORE_LINE_Y) / 2.0;
-        let v = calc_point_item_value(mid);
+        let v = poi(mid);
         assert!(v > DEFAULT_POI_MIN_VALUE, "midpoint value should exceed minimum");
         assert!(v < DEFAULT_POI_BASE_VALUE, "midpoint value should be below maximum");
     }
@@ -347,7 +365,7 @@ mod tests {
     #[test]
     fn point_item_value_is_monotone() {
         let ys: Vec<f32> = (-10..=10).map(|i| i as f32 * 20.0).collect();
-        let values: Vec<u32> = ys.iter().copied().map(calc_point_item_value).collect();
+        let values: Vec<u32> = ys.iter().copied().map(poi).collect();
         for pair in values.windows(2) {
             assert!(
                 pair[0] <= pair[1],
@@ -376,7 +394,7 @@ mod tests {
     fn power_small_adds_one() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerSmall, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerSmall, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 1);
     }
 
@@ -385,7 +403,7 @@ mod tests {
     fn power_large_adds_eight() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 8);
     }
 
@@ -395,7 +413,7 @@ mod tests {
         let mut gd = make_game_data();
         gd.power = 127;
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 128);
     }
 
@@ -405,7 +423,7 @@ mod tests {
         let mut gd = make_game_data();
         gd.power = 50;
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::FullPower, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::FullPower, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 128);
     }
 
@@ -419,6 +437,9 @@ mod tests {
             &mut tracker,
             ItemKind::PointItem,
             DEFAULT_SCORE_LINE_Y,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
         );
         assert_eq!(gd.score, DEFAULT_POI_BASE_VALUE as u64);
     }
@@ -430,7 +451,7 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..4 {
-            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
+            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         }
         assert_eq!(gd.lives, 2, "apply_item must not extend lives");
         assert_eq!(tracker.life_fragments, 4);
@@ -443,7 +464,7 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
-            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
+            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         }
         assert_eq!(gd.lives, 2, "apply_item must not extend lives");
         assert_eq!(tracker.life_fragments, 5);
@@ -456,7 +477,7 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
-            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0);
+            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         }
         assert_eq!(gd.bombs, 3, "apply_item must not modify bombs");
         assert_eq!(tracker.bomb_fragments, 5);

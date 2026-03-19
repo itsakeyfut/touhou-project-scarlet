@@ -92,12 +92,10 @@ ron_asset_loader!(EnemyBulletConfigLoader, enemy_bullet::EnemyBulletConfigPartia
 /// Plugin for Scarlet game configuration management.
 ///
 /// - Registers RON asset loaders for all config types.
-/// - Loads `assets/config/player.ron` and `assets/config/game_rules.ron`.
-/// - Inserts `PlayerConfigHandle` and `GameRulesConfigHandle` as resources.
+/// - Loads all RON config files and inserts their handles as resources.
 /// - Registers hot-reload logging systems (run in all states).
 ///
-/// **Must be added before [`crate::ScarletCorePlugin`]** so handles are
-/// available when systems first run.
+/// Added automatically by [`crate::ScarletCorePlugin`]; do not add it twice.
 pub struct ScarletConfigPlugin;
 
 impl Plugin for ScarletConfigPlugin {
