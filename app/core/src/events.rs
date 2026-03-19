@@ -24,3 +24,14 @@ pub struct PlayerHitEvent {
     /// Damage dealt by the colliding bullet.
     pub bullet_damage: u8,
 }
+
+/// Fired when an enemy bullet newly enters the player's graze zone (16 px).
+///
+/// Consumed by [`crate::shaders::plugin::update_graze_material`] to trigger
+/// the electric spark animation on the graze-field ring. Emitted by
+/// [`crate::systems::collision::graze_detection_system`].
+#[derive(Event, Message)]
+pub struct GrazeEvent {
+    /// The enemy bullet entity that caused the graze.
+    pub bullet_entity: Entity,
+}

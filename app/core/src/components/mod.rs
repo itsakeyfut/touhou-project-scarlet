@@ -7,4 +7,4 @@ pub use bullet::{
     EnemyBulletKind, PlayerBullet, ShootTimer,
 };
 pub use enemy::Enemy;
-pub use player::{InvincibilityTimer, Player, PlayerStats};
+pub use player::{GrazeVisual, InvincibilityTimer, Player, PlayerStats};

@@ -39,3 +39,11 @@ impl Default for PlayerStats {
 pub struct InvincibilityTimer {
     pub timer: Timer,
 }
+
+/// Marker component for the graze-field visual child entity.
+///
+/// Spawned as a `Mesh2d(Circle::new(16.0))` child of the player entity by
+/// [`crate::shaders::plugin::setup_graze_visual`]. The mesh uses
+/// [`crate::shaders::GrazeMaterial`] which renders the electric ring effect.
+#[derive(Component)]
+pub struct GrazeVisual;
