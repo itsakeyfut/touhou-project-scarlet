@@ -307,8 +307,8 @@ pub fn calc_point_item_value(player_y: f32, score_line_y: f32, poi_base: u32, po
     let range = score_line_y - PLAY_AREA_BOTTOM;
     let t = ((player_y - PLAY_AREA_BOTTOM) / range).clamp(0.0, 1.0);
 
-    let span = (poi_base - poi_min) as f32;
-    (poi_min as f32 + span * t) as u32
+    let span = poi_base.saturating_sub(poi_min) as f32;
+    (poi_min as f32 + span * t).round() as u32
 }
 
 #[cfg(test)]

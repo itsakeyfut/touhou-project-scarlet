@@ -9,10 +9,13 @@
 //!
 //! # Sub-modules
 //!
-//! | Module          | Contents |
-//! |-----------------|----------|
-//! | [`player`]      | `PlayerConfig` + `PlayerConfigHandle` + `PlayerConfigParams` |
-//! | [`game_rules`]  | `GameRulesConfig` + `GameRulesConfigHandle` + `GameRulesConfigParams` |
+//! | Module            | Contents |
+//! |-------------------|----------|
+//! | [`player`]        | `PlayerConfig` + `PlayerConfigHandle` + `PlayerConfigParams` |
+//! | [`game_rules`]    | `GameRulesConfig` + `GameRulesConfigHandle` + `GameRulesConfigParams` |
+//! | [`fodder_enemy`]  | `FodderEnemyConfig` + `FodderEnemyConfigHandle` + `FodderEnemyConfigParams` |
+//! | [`player_bullet`] | `PlayerBulletConfig` + `PlayerBulletConfigHandle` + `PlayerBulletConfigParams` |
+//! | [`enemy_bullet`]  | `EnemyBulletConfig` + `EnemyBulletConfigHandle` + `EnemyBulletConfigParams` |
 
 pub mod enemy_bullet;
 pub mod fodder_enemy;
