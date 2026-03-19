@@ -3,6 +3,8 @@
 // Import individual functions with Bevy's naga_oil syntax:
 //   #import "shaders/common/noise.wgsl"::hash21
 
+#define_import_path "shaders/common/noise.wgsl"
+
 /// Pseudo-random hash: maps a 2-D point to a scalar in [0.0, 1.0).
 ///
 /// Based on the classic "fract-sin" trick, cheap and sufficient for

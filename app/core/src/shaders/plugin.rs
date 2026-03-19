@@ -1,5 +1,7 @@
 use bevy::{prelude::*, sprite_render::Material2dPlugin};
 
+use crate::game_set::GameSystemSet;
+
 use crate::{
     components::player::{GrazeVisual, Player},
     events::GrazeEvent,
@@ -36,9 +38,15 @@ impl Plugin for ScarletShadersPlugin {
 
         // Graze field visual — spawn once when the player entity appears,
         // then update uniforms every frame.
+        // update_graze_material must run after Collision so that GrazeEvents
+        // emitted by graze_detection_system are visible to MessageReader.
         app.add_systems(
             Update,
-            (setup_graze_visual, update_graze_material).run_if(in_state(AppState::Playing)),
+            (
+                setup_graze_visual,
+                update_graze_material.after(GameSystemSet::Collision),
+            )
+                .run_if(in_state(AppState::Playing)),
         );
 
         // TODO(phase-08): add Material2dPlugin::<SpellCardBgMaterial>, HitFlashMaterial
