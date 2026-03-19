@@ -65,9 +65,12 @@ pub fn player_bullet_hit_enemy(
     bullets: Query<(Entity, &Transform, &PlayerBullet)>,
     mut enemies: Query<(Entity, &Transform, &mut Enemy)>,
 ) {
-    // Track bullets already consumed this frame to prevent one bullet
-    // hitting multiple enemies (commands are deferred).
+    // Track entities already consumed this frame (commands are deferred,
+    // so despawns are not applied until after the system completes).
+    // hit_bullets: prevents one bullet from hitting multiple enemies.
+    // hit_enemies:  prevents already-defeated enemies from absorbing more bullets.
     let mut hit_bullets: HashSet<Entity> = HashSet::new();
+    let mut hit_enemies: HashSet<Entity> = HashSet::new();
 
     for (bullet_entity, bullet_tf, player_bullet) in &bullets {
         if hit_bullets.contains(&bullet_entity) {
@@ -77,6 +80,10 @@ pub fn player_bullet_hit_enemy(
         let bullet_pos = bullet_tf.translation.truncate();
 
         for (enemy_entity, enemy_tf, mut enemy) in &mut enemies {
+            if hit_enemies.contains(&enemy_entity) {
+                continue;
+            }
+
             let enemy_pos = enemy_tf.translation.truncate();
 
             if check_circle_collision(
@@ -91,6 +98,7 @@ pub fn player_bullet_hit_enemy(
 
                 if enemy.hp <= 0.0 {
                     commands.entity(enemy_entity).despawn();
+                    hit_enemies.insert(enemy_entity);
                 }
 
                 // Bullet is spent — move on to the next bullet.
