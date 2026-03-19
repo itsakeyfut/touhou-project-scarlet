@@ -12,14 +12,14 @@ pub mod systems;
 
 pub use components::{
     BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, Enemy,
-    EnemyBullet, EnemyBulletKind, InvincibilityTimer, Player, PlayerBullet, PlayerStats,
-    ShootTimer,
+    EnemyBullet, EnemyBulletKind, GrazeVisual, InvincibilityTimer, Player, PlayerBullet,
+    PlayerStats, ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
-pub use events::{PlayerHitEvent, ShootEvent};
+pub use events::{GrazeEvent, PlayerHitEvent, ShootEvent};
 pub use game_set::GameSystemSet;
 pub use resources::GameData;
-pub use shaders::ScarletShadersPlugin;
+pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;
 pub use systems::collision::check_circle_collision;
 
@@ -38,6 +38,7 @@ impl Plugin for ScarletCorePlugin {
         // Events.
         app.add_message::<ShootEvent>();
         app.add_message::<PlayerHitEvent>();
+        app.add_message::<GrazeEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());

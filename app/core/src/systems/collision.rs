@@ -9,7 +9,7 @@ use crate::{
         player::{InvincibilityTimer, Player, PlayerStats},
     },
     constants::PLAY_AREA_HALF_H,
-    events::PlayerHitEvent,
+    events::{GrazeEvent, PlayerHitEvent},
     resources::GameData,
     states::AppState,
 };
@@ -229,6 +229,7 @@ pub fn graze_detection_system(
     bullets: Query<(Entity, &Transform, &EnemyBulletKind), With<EnemyBullet>>,
     mut game_data: ResMut<GameData>,
     mut graze_set: Local<HashSet<Entity>>,
+    mut graze_events: MessageWriter<GrazeEvent>,
 ) {
     let Ok((player_tf, stats)) = player.single() else {
         return;
@@ -248,6 +249,9 @@ pub fn graze_detection_system(
             current_grazed.insert(entity);
             if !graze_set.contains(&entity) {
                 game_data.graze += 1;
+                graze_events.write(GrazeEvent {
+                    bullet_entity: entity,
+                });
             }
         }
     }
