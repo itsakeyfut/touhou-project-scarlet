@@ -182,6 +182,13 @@ impl Plugin for ScarletCorePlugin {
                 .in_set(GameSystemSet::BulletEmit),
         );
 
+        // Config readiness gate: advances Loading → Playing once all RON files
+        // have been fully loaded by the asset server.
+        app.add_systems(
+            Update,
+            systems::loading::wait_for_configs.run_if(in_state(AppState::Loading)),
+        );
+
         #[cfg(feature = "debug-hitbox")]
         app.add_systems(Startup, debug::debug_skip_to_playing)
             .add_systems(OnEnter(AppState::Playing), debug::spawn_debug_enemies)
