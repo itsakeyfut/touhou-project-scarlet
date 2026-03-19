@@ -12,15 +12,17 @@ pub mod systems;
 
 pub use components::{
     BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, Enemy,
-    EnemyBullet, EnemyBulletKind, GrazeVisual, InvincibilityTimer, ItemKind, ItemPhysics, Player,
-    PlayerBullet, PlayerStats, ShootTimer,
+    EnemyBullet, EnemyBulletKind, EnemyKind, EnemyMovement, GrazeVisual, InvincibilityTimer,
+    ItemKind, ItemPhysics, Player, PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::{
     EnemyDefeatedEvent, ExtendEvent, ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
 };
 pub use game_set::GameSystemSet;
-pub use resources::{BOMB_EXTEND_FRAGMENTS, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS};
+pub use resources::{
+    BOMB_EXTEND_FRAGMENTS, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS, StageData,
+};
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;
 pub use systems::collision::check_circle_collision;
@@ -48,6 +50,7 @@ impl Plugin for ScarletCorePlugin {
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
         app.insert_resource(FragmentTracker::default());
+        app.insert_resource(StageData::default());
 
         // System set ordering — all sets run only while Playing.
         app.configure_sets(

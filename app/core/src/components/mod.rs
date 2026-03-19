@@ -7,6 +7,6 @@ pub use bullet::{
     BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet,
     EnemyBulletKind, PlayerBullet, ShootTimer,
 };
-pub use enemy::Enemy;
+pub use enemy::{Enemy, EnemyKind, EnemyMovement};
 pub use item::{ItemKind, ItemPhysics};
 pub use player::{GrazeVisual, InvincibilityTimer, Player, PlayerStats};
