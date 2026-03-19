@@ -25,6 +25,8 @@ use crate::{
 /// - [`Transform`] — positioned at `pos` with a fixed Z of `1.2` (above the
 ///   play field but below bullets at Z `1.5`).
 /// - [`DespawnOutOfBounds`] — automatically removed when it falls off-screen.
+/// - [`GameSessionEntity`] — marks this entity for unified despawn when
+///   leaving [`crate::states::AppState::Playing`].
 pub fn spawn_item(commands: &mut Commands, pos: Vec2, kind: ItemKind) {
     commands.spawn((
         kind,
