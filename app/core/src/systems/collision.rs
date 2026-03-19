@@ -2,7 +2,17 @@ use std::collections::HashSet;
 
 use bevy::prelude::*;
 
-use crate::components::{bullet::PlayerBullet, enemy::Enemy};
+use crate::{
+    components::{
+        bullet::{EnemyBullet, EnemyBulletKind, PlayerBullet},
+        enemy::Enemy,
+        player::{InvincibilityTimer, Player, PlayerStats},
+    },
+    constants::PLAY_AREA_HALF_H,
+    events::PlayerHitEvent,
+    resources::GameData,
+    states::AppState,
+};
 
 /// Collision radius used for player bullet → enemy hit detection (px).
 ///
@@ -106,6 +116,91 @@ pub fn player_bullet_hit_enemy(
             }
         }
     }
+}
+
+/// Checks whether any enemy bullet overlaps the player's hitbox and, if so,
+/// emits a [`PlayerHitEvent`].
+///
+/// - Uses [`PlayerStats::hitbox_radius`] for the player circle.
+/// - Uses [`EnemyBulletKind::collision_radius`] for each bullet circle.
+/// - Skips the check entirely while [`InvincibilityTimer`] is present on the player.
+/// - Emits at most one [`PlayerHitEvent`] per frame regardless of bullet count.
+///
+/// Registered in [`crate::GameSystemSet::Collision`].
+pub fn player_hit_detection(
+    player: Query<(&Transform, &PlayerStats, Option<&InvincibilityTimer>), With<Player>>,
+    bullets: Query<(&Transform, &EnemyBulletKind), With<EnemyBullet>>,
+    mut hit_events: MessageWriter<PlayerHitEvent>,
+) {
+    let Ok((player_tf, stats, invincibility)) = player.single() else {
+        return;
+    };
+
+    // Skip detection while the player is invincible.
+    if invincibility.is_some() {
+        return;
+    }
+
+    let player_pos = player_tf.translation.truncate();
+
+    for (bullet_tf, kind) in &bullets {
+        let bullet_pos = bullet_tf.translation.truncate();
+        if check_circle_collision(
+            player_pos,
+            stats.hitbox_radius,
+            bullet_pos,
+            kind.collision_radius(),
+        ) {
+            hit_events.write(PlayerHitEvent { bullet_damage: 1 });
+            // One event per frame — avoid rapid-fire deaths on the same tick.
+            return;
+        }
+    }
+}
+
+/// Responds to [`PlayerHitEvent`] by decrementing lives, applying power loss,
+/// resetting the player's position, and starting the invincibility window.
+///
+/// # Game over
+///
+/// When [`GameData::lives`] reaches 0 the state machine transitions to
+/// [`AppState::GameOver`] and no further hit processing occurs.
+///
+/// Registered in [`crate::GameSystemSet::GameLogic`].
+pub fn handle_player_hit(
+    mut commands: Commands,
+    mut hit_events: MessageReader<PlayerHitEvent>,
+    mut game_data: ResMut<GameData>,
+    mut player: Query<(Entity, &mut Transform), With<Player>>,
+    mut next_state: ResMut<NextState<AppState>>,
+) {
+    // Only react to the first event per frame.
+    let Some(_event) = hit_events.read().next() else {
+        return;
+    };
+
+    let Ok((player_entity, mut transform)) = player.single_mut() else {
+        return;
+    };
+
+    // Decrement lives (saturating prevents wrapping on u8).
+    game_data.lives = game_data.lives.saturating_sub(1);
+
+    // Power loss: drop by 16 per hit, floor at 0 (matches original EoSD).
+    game_data.power = game_data.power.saturating_sub(16);
+
+    if game_data.lives == 0 {
+        next_state.set(AppState::GameOver);
+        return;
+    }
+
+    // Reset the player to the standard spawn position.
+    transform.translation = Vec3::new(0.0, -PLAY_AREA_HALF_H + 60.0, 1.0);
+
+    // Start the 3-second invincibility window.
+    commands.entity(player_entity).insert(InvincibilityTimer {
+        timer: Timer::from_seconds(3.0, TimerMode::Once),
+    });
 }
 
 // ---------------------------------------------------------------------------

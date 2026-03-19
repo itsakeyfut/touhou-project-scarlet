@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     components::{
         bullet::ShootTimer,
-        player::{Player, PlayerStats},
+        player::{InvincibilityTimer, Player, PlayerStats},
     },
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
     events::ShootEvent,
@@ -94,6 +94,34 @@ pub fn player_movement_system(
         (transform.translation.x + delta.x).clamp(-PLAY_AREA_HALF_W, PLAY_AREA_HALF_W);
     transform.translation.y =
         (transform.translation.y + delta.y).clamp(-PLAY_AREA_HALF_H, PLAY_AREA_HALF_H);
+}
+
+/// Ticks the [`InvincibilityTimer`] and removes it once it expires.
+///
+/// While the timer is running the player sprite flickers at 10 Hz to signal
+/// the invincibility window visually. When the timer finishes the sprite is
+/// restored to full opacity and the component is removed.
+///
+/// Registered in [`crate::GameSystemSet::Effects`].
+pub fn update_invincibility(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut InvincibilityTimer, &mut Sprite), With<Player>>,
+    time: Res<Time>,
+) {
+    let Ok((entity, mut invincibility, mut sprite)) = query.single_mut() else {
+        return;
+    };
+
+    invincibility.timer.tick(time.delta());
+
+    if invincibility.timer.is_finished() {
+        sprite.color = sprite.color.with_alpha(1.0);
+        commands.entity(entity).remove::<InvincibilityTimer>();
+    } else {
+        // Flicker at 10 Hz: alternate between full opacity and 20% opacity.
+        let visible = ((invincibility.timer.elapsed_secs() * 10.0) as u32).is_multiple_of(2);
+        sprite.color = sprite.color.with_alpha(if visible { 1.0 } else { 0.2 });
+    }
 }
 
 #[cfg(test)]

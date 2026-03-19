@@ -9,7 +9,7 @@ pub struct Player;
 /// Values are tuned to match the original EoSD feel:
 /// - Normal speed: 200 px/s
 /// - Focus speed:  100 px/s (Shift held)
-/// - Hitbox: 2.5 px radius (tight, as in the original)
+/// - Hitbox: 2.0 px radius (tight, as in the original)
 /// - Graze:  16 px radius
 #[derive(Component)]
 pub struct PlayerStats {
@@ -28,7 +28,7 @@ impl Default for PlayerStats {
         Self {
             speed: 200.0,
             slow_speed: 100.0,
-            hitbox_radius: 2.5,
+            hitbox_radius: 2.0,
             graze_radius: 16.0,
         }
     }
