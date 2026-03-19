@@ -16,7 +16,9 @@ pub use components::{
     PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
-pub use events::{EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent, ShootEvent};
+pub use events::{
+    EnemyDefeatedEvent, ExtendEvent, ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
+};
 pub use game_set::GameSystemSet;
 pub use resources::{BOMB_EXTEND_FRAGMENTS, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS};
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
@@ -41,6 +43,7 @@ impl Plugin for ScarletCorePlugin {
         app.add_message::<PlayerHitEvent>();
         app.add_message::<GrazeEvent>();
         app.add_message::<EnemyDefeatedEvent>();
+        app.add_message::<ExtendEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
@@ -110,7 +113,11 @@ impl Plugin for ScarletCorePlugin {
             (
                 systems::collision::handle_player_hit,
                 systems::item::on_enemy_defeated,
-                systems::item::item_collection_system,
+                (
+                    systems::item::item_collection_system,
+                    systems::score::check_extend_system,
+                )
+                    .chain(),
             )
                 .in_set(GameSystemSet::GameLogic),
         );

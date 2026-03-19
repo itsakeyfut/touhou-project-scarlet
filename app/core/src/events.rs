@@ -47,6 +47,30 @@ pub struct EnemyDefeatedEvent {
     pub is_boss: bool,
 }
 
+/// The stock type gained when an extend is triggered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExtendKind {
+    /// One extra life granted by collecting five [`crate::components::ItemKind::LifeFragment`]s.
+    Life,
+    /// One extra bomb stock granted by collecting five [`crate::components::ItemKind::BombFragment`]s.
+    Bomb,
+}
+
+/// Fired when the player earns an extra life or bomb stock through fragment collection.
+///
+/// Emitted by [`crate::systems::score::check_extend_system`] when a
+/// [`crate::resources::FragmentTracker`] counter reaches its threshold
+/// ([`crate::resources::LIFE_EXTEND_FRAGMENTS`] or
+/// [`crate::resources::BOMB_EXTEND_FRAGMENTS`]).
+///
+/// Consumers (future audio / UI systems) can read this event to play the
+/// extend jingle or display a notification.
+#[derive(Event, Message)]
+pub struct ExtendEvent {
+    /// Which stock type was extended.
+    pub kind: ExtendKind,
+}
+
 /// Fired when an enemy bullet newly enters the player's graze zone (16 px).
 ///
 /// Consumed by [`crate::shaders::plugin::update_graze_material`] to trigger
