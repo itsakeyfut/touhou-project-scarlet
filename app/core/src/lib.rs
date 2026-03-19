@@ -17,11 +17,13 @@ pub use components::{
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::{
-    EnemyDefeatedEvent, ExtendEvent, ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
+    BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent, ExtendKind, GrazeEvent, PlayerHitEvent,
+    ShootEvent,
 };
 pub use game_set::GameSystemSet;
 pub use resources::{
-    BOMB_EXTEND_FRAGMENTS, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS, StageData,
+    BOMB_EXTEND_FRAGMENTS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
+    SpawnEntry, StageData,
 };
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;
@@ -46,11 +48,13 @@ impl Plugin for ScarletCorePlugin {
         app.add_message::<GrazeEvent>();
         app.add_message::<EnemyDefeatedEvent>();
         app.add_message::<ExtendEvent>();
+        app.add_message::<BossSpawnEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
         app.insert_resource(FragmentTracker::default());
         app.insert_resource(StageData::default());
+        app.insert_resource(EnemySpawner::default());
 
         // System set ordering — all sets run only while Playing.
         app.configure_sets(
@@ -96,7 +100,15 @@ impl Plugin for ScarletCorePlugin {
         )
         .add_systems(
             Update,
+            systems::enemy::movement::enemy_movement_system.in_set(GameSystemSet::Movement),
+        )
+        .add_systems(
+            Update,
             systems::bullet::despawn_out_of_bounds_system.in_set(GameSystemSet::Cleanup),
+        )
+        .add_systems(
+            Update,
+            systems::enemy::cull::enemy_cull_system.in_set(GameSystemSet::Cleanup),
         );
 
         // Collision systems.
@@ -123,6 +135,11 @@ impl Plugin for ScarletCorePlugin {
                     .chain(),
             )
                 .in_set(GameSystemSet::GameLogic),
+        );
+
+        app.add_systems(
+            Update,
+            systems::stage::stage_control_system.in_set(GameSystemSet::StageControl),
         );
 
         app.add_systems(
