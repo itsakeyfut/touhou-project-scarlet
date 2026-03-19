@@ -212,9 +212,7 @@ impl<'w> PlayerBulletConfigParams<'w> {
 // ---------------------------------------------------------------------------
 
 /// Logs asset lifecycle events for [`PlayerBulletConfig`].
-pub fn hot_reload_player_bullet_config(
-    mut events: MessageReader<AssetEvent<PlayerBulletConfig>>,
-) {
+pub fn hot_reload_player_bullet_config(mut events: MessageReader<AssetEvent<PlayerBulletConfig>>) {
     for event in events.read() {
         match event {
             AssetEvent::Added { .. } => info!("PlayerBulletConfig loaded"),
@@ -271,7 +269,10 @@ PlayerBulletConfig(
         let cfg = make_config_from_ron(src);
         assert_eq!(cfg.speed, 800.0);
         assert_eq!(cfg.spread, DEFAULT_PLAYER_BULLET_SPREAD);
-        assert_eq!(cfg.spread_speed_scale, DEFAULT_PLAYER_BULLET_SPREAD_SPEED_SCALE);
+        assert_eq!(
+            cfg.spread_speed_scale,
+            DEFAULT_PLAYER_BULLET_SPREAD_SPEED_SCALE
+        );
         assert_eq!(cfg.origin_y_offset, DEFAULT_PLAYER_BULLET_ORIGIN_Y_OFFSET);
         assert_eq!(cfg.collision_radius, DEFAULT_PLAYER_BULLET_COLLISION_RADIUS);
         assert_eq!(cfg.sprite_width, DEFAULT_PLAYER_BULLET_SPRITE_WIDTH);

@@ -95,12 +95,8 @@ pub fn player_bullet_hit_enemy(
 
             let enemy_pos = enemy_tf.translation.truncate();
 
-            if check_circle_collision(
-                bullet_pos,
-                bullet_radius,
-                enemy_pos,
-                enemy.collision_radius,
-            ) {
+            if check_circle_collision(bullet_pos, bullet_radius, enemy_pos, enemy.collision_radius)
+            {
                 enemy.hp -= player_bullet.damage;
                 commands.entity(bullet_entity).despawn();
                 hit_bullets.insert(bullet_entity);

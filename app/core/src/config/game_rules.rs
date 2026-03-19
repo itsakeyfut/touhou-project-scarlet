@@ -220,9 +220,7 @@ impl<'w> GameRulesConfigParams<'w> {
     }
 
     pub fn max_bombs(&self) -> u8 {
-        self.get()
-            .map(|c| c.max_bombs)
-            .unwrap_or(DEFAULT_MAX_BOMBS)
+        self.get().map(|c| c.max_bombs).unwrap_or(DEFAULT_MAX_BOMBS)
     }
 }
 

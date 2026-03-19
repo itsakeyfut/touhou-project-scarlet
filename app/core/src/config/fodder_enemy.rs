@@ -230,9 +230,7 @@ impl<'w> FodderEnemyConfigParams<'w> {
 // ---------------------------------------------------------------------------
 
 /// Logs asset lifecycle events for [`FodderEnemyConfig`].
-pub fn hot_reload_fodder_enemy_config(
-    mut events: MessageReader<AssetEvent<FodderEnemyConfig>>,
-) {
+pub fn hot_reload_fodder_enemy_config(mut events: MessageReader<AssetEvent<FodderEnemyConfig>>) {
     for event in events.read() {
         match event {
             AssetEvent::Added { .. } => info!("FodderEnemyConfig loaded"),

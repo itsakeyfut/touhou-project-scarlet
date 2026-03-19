@@ -118,8 +118,7 @@ impl Plugin for ScarletConfigPlugin {
         // Load config files and insert handles as resources.
         let asset_server = app.world_mut().resource::<AssetServer>();
         let player_handle: Handle<PlayerConfig> = asset_server.load("config/player.ron");
-        let game_rules_handle: Handle<GameRulesConfig> =
-            asset_server.load("config/game_rules.ron");
+        let game_rules_handle: Handle<GameRulesConfig> = asset_server.load("config/game_rules.ron");
         let fodder_enemy_handle: Handle<FodderEnemyConfig> =
             asset_server.load("config/enemies/fodder.ron");
         let player_bullet_handle: Handle<PlayerBulletConfig> =

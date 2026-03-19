@@ -184,9 +184,7 @@ impl<'w> EnemyBulletConfigParams<'w> {
 // ---------------------------------------------------------------------------
 
 /// Logs asset lifecycle events for [`EnemyBulletConfig`].
-pub fn hot_reload_enemy_bullet_config(
-    mut events: MessageReader<AssetEvent<EnemyBulletConfig>>,
-) {
+pub fn hot_reload_enemy_bullet_config(mut events: MessageReader<AssetEvent<EnemyBulletConfig>>) {
     for event in events.read() {
         match event {
             AssetEvent::Added { .. } => info!("EnemyBulletConfig loaded"),
