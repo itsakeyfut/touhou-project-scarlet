@@ -207,8 +207,8 @@ pub fn item_movement_system(
 /// | `PowerLarge` | `power += 8` (max 128) |
 /// | `FullPower`  | `power = 128` |
 /// | `PointItem`  | `score += calc_point_item_value(player_y)` |
-/// | `LifeFragment` | fragment counter +1; at 5 → `lives += 1`, counter reset |
-/// | `BombFragment` | fragment counter +1; at 5 → `bombs = (bombs+1).min(3)`, counter reset |
+/// | `LifeFragment` | fragment counter +1 (extend handled by [`crate::systems::score::check_extend_system`]) |
+/// | `BombFragment` | fragment counter +1 (extend handled by [`crate::systems::score::check_extend_system`]) |
 ///
 /// Registered in [`crate::GameSystemSet::GameLogic`].
 pub fn item_collection_system(

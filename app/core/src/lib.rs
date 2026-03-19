@@ -113,8 +113,11 @@ impl Plugin for ScarletCorePlugin {
             (
                 systems::collision::handle_player_hit,
                 systems::item::on_enemy_defeated,
-                systems::item::item_collection_system,
-                systems::score::check_extend_system,
+                (
+                    systems::item::item_collection_system,
+                    systems::score::check_extend_system,
+                )
+                    .chain(),
             )
                 .in_set(GameSystemSet::GameLogic),
         );
