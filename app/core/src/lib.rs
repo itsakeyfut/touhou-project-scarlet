@@ -88,7 +88,21 @@ impl Plugin for ScarletCorePlugin {
         // Collision systems.
         app.add_systems(
             Update,
-            systems::collision::player_bullet_hit_enemy.in_set(GameSystemSet::Collision),
+            (
+                systems::collision::player_bullet_hit_enemy,
+                systems::collision::player_hit_detection,
+            )
+                .in_set(GameSystemSet::Collision),
+        );
+
+        app.add_systems(
+            Update,
+            systems::collision::handle_player_hit.in_set(GameSystemSet::GameLogic),
+        );
+
+        app.add_systems(
+            Update,
+            systems::player::update_invincibility.in_set(GameSystemSet::Effects),
         );
 
         // Danmaku emitter systems.
