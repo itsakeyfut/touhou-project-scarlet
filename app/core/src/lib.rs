@@ -11,15 +11,17 @@ pub mod states;
 pub mod systems;
 
 pub use components::{
-    BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet,
-    EnemyBulletKind, InvincibilityTimer, Player, PlayerBullet, PlayerStats, ShootTimer,
+    BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, Enemy,
+    EnemyBullet, EnemyBulletKind, InvincibilityTimer, Player, PlayerBullet, PlayerStats,
+    ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
-pub use events::ShootEvent;
+pub use events::{PlayerHitEvent, ShootEvent};
 pub use game_set::GameSystemSet;
 pub use resources::GameData;
 pub use shaders::ScarletShadersPlugin;
 pub use states::AppState;
+pub use systems::collision::check_circle_collision;
 
 /// Core game plugin.
 ///
@@ -35,6 +37,7 @@ impl Plugin for ScarletCorePlugin {
 
         // Events.
         app.add_message::<ShootEvent>();
+        app.add_message::<PlayerHitEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
@@ -80,6 +83,12 @@ impl Plugin for ScarletCorePlugin {
         .add_systems(
             Update,
             systems::bullet::despawn_out_of_bounds_system.in_set(GameSystemSet::Cleanup),
+        );
+
+        // Collision systems.
+        app.add_systems(
+            Update,
+            systems::collision::player_bullet_hit_enemy.in_set(GameSystemSet::Collision),
         );
 
         // Danmaku emitter systems.

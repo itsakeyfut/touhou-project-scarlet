@@ -2,7 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     AppState,
-    components::bullet::{BulletEmitter, BulletPattern, EnemyBullet, EnemyBulletKind},
+    components::{
+        bullet::{BulletEmitter, BulletPattern, EnemyBullet, EnemyBulletKind},
+        enemy::Enemy,
+    },
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH},
     systems::danmaku::emitter::SpiralState,
 };
@@ -51,6 +54,7 @@ pub fn debug_play_area_system(mut gizmos: Gizmos) {
 pub fn spawn_debug_enemies(mut commands: Commands) {
     // Ring — top-left
     commands.spawn((
+        Enemy::new(100.0, 16.0),
         BulletEmitter {
             pattern: BulletPattern::Ring {
                 count: 8,
@@ -70,6 +74,7 @@ pub fn spawn_debug_enemies(mut commands: Commands) {
 
     // Aimed — top-right
     commands.spawn((
+        Enemy::new(100.0, 16.0),
         BulletEmitter {
             pattern: BulletPattern::Aimed {
                 count: 3,
@@ -90,6 +95,7 @@ pub fn spawn_debug_enemies(mut commands: Commands) {
 
     // Spread — centre-top
     commands.spawn((
+        Enemy::new(100.0, 16.0),
         BulletEmitter {
             pattern: BulletPattern::Spread {
                 count: 5,
@@ -111,6 +117,7 @@ pub fn spawn_debug_enemies(mut commands: Commands) {
 
     // Spiral — centre
     commands.spawn((
+        Enemy::new(200.0, 16.0),
         BulletEmitter {
             pattern: BulletPattern::Spiral {
                 arms: 3,
