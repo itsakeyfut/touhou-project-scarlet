@@ -8,17 +8,12 @@ use crate::{
         enemy::Enemy,
         player::{InvincibilityTimer, Player, PlayerStats},
     },
+    config::{EnemyBulletConfigParams, PlayerBulletConfigParams, PlayerConfigParams},
     constants::PLAY_AREA_HALF_H,
     events::{EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
     resources::GameData,
     states::AppState,
 };
-
-/// Collision radius used for player bullet → enemy hit detection (px).
-///
-/// Player bullet sprites are 4×12 px; using the half-width plus a 1 px
-/// margin produces a feel close to the original game.
-const PLAYER_BULLET_RADIUS: f32 = 3.0;
 
 // ---------------------------------------------------------------------------
 // Collision utility
@@ -75,6 +70,7 @@ pub fn player_bullet_hit_enemy(
     bullets: Query<(Entity, &Transform, &PlayerBullet)>,
     mut enemies: Query<(Entity, &Transform, &mut Enemy)>,
     mut defeated_events: MessageWriter<EnemyDefeatedEvent>,
+    bullet_cfg: PlayerBulletConfigParams,
 ) {
     // Track entities already consumed this frame (commands are deferred,
     // so despawns are not applied until after the system completes).
@@ -82,6 +78,8 @@ pub fn player_bullet_hit_enemy(
     // hit_enemies:  prevents already-defeated enemies from absorbing more bullets.
     let mut hit_bullets: HashSet<Entity> = HashSet::new();
     let mut hit_enemies: HashSet<Entity> = HashSet::new();
+
+    let bullet_radius = bullet_cfg.collision_radius();
 
     for (bullet_entity, bullet_tf, player_bullet) in &bullets {
         if hit_bullets.contains(&bullet_entity) {
@@ -99,7 +97,7 @@ pub fn player_bullet_hit_enemy(
 
             if check_circle_collision(
                 bullet_pos,
-                PLAYER_BULLET_RADIUS,
+                bullet_radius,
                 enemy_pos,
                 enemy.collision_radius,
             ) {
@@ -137,6 +135,7 @@ pub fn player_hit_detection(
     player: Query<(&Transform, &PlayerStats, Option<&InvincibilityTimer>), With<Player>>,
     bullets: Query<(&Transform, &EnemyBulletKind), With<EnemyBullet>>,
     mut hit_events: MessageWriter<PlayerHitEvent>,
+    enemy_bullet_cfg: EnemyBulletConfigParams,
 ) {
     let Ok((player_tf, stats, invincibility)) = player.single() else {
         return;
@@ -155,7 +154,7 @@ pub fn player_hit_detection(
             player_pos,
             stats.hitbox_radius,
             bullet_pos,
-            kind.collision_radius(),
+            enemy_bullet_cfg.radius_for(*kind),
         ) {
             hit_events.write(PlayerHitEvent { bullet_damage: 1 });
             // One event per frame — avoid rapid-fire deaths on the same tick.
@@ -179,6 +178,7 @@ pub fn handle_player_hit(
     mut game_data: ResMut<GameData>,
     mut player: Query<(Entity, &mut Transform), With<Player>>,
     mut next_state: ResMut<NextState<AppState>>,
+    player_cfg: PlayerConfigParams,
 ) {
     // Only react to the first event per frame.
     let Some(_event) = hit_events.read().next() else {
@@ -203,9 +203,9 @@ pub fn handle_player_hit(
     // Reset the player to the standard spawn position.
     transform.translation = Vec3::new(0.0, -PLAY_AREA_HALF_H + 60.0, 1.0);
 
-    // Start the 3-second invincibility window.
+    // Start the invincibility window (duration from player.ron).
     commands.entity(player_entity).insert(InvincibilityTimer {
-        timer: Timer::from_seconds(3.0, TimerMode::Once),
+        timer: Timer::from_seconds(player_cfg.invincibility_secs(), TimerMode::Once),
     });
 }
 
@@ -236,6 +236,7 @@ pub fn graze_detection_system(
     mut game_data: ResMut<GameData>,
     mut graze_set: Local<HashSet<Entity>>,
     mut graze_events: MessageWriter<GrazeEvent>,
+    enemy_bullet_cfg: EnemyBulletConfigParams,
 ) {
     let Ok((player_tf, stats)) = player.single() else {
         return;
@@ -250,7 +251,7 @@ pub fn graze_detection_system(
             player_pos,
             stats.graze_radius,
             bullet_pos,
-            kind.collision_radius(),
+            enemy_bullet_cfg.radius_for(*kind),
         ) {
             current_grazed.insert(entity);
             if !graze_set.contains(&entity) {

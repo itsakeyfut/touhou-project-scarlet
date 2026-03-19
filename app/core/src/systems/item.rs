@@ -6,41 +6,13 @@ use crate::{
         item::{ItemKind, ItemPhysics},
         player::{Player, PlayerStats},
     },
+    config::{
+        game_rules::{DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE, DEFAULT_SCORE_LINE_Y},
+        GameRulesConfigParams,
+    },
     events::EnemyDefeatedEvent,
     resources::{FragmentTracker, GameData},
 };
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-/// Speed at which attracted items move toward the player (px/s).
-///
-/// Must exceed the maximum fall speed (`200 px/s`) so attracted items
-/// visibly accelerate upward toward the player.
-pub const ITEM_ATTRACT_SPEED: f32 = 400.0;
-
-/// Maximum downward fall speed for items under gravity (px/s).
-const ITEM_MAX_FALL_SPEED: f32 = -200.0;
-
-/// Radius within which the player collects an item (px).
-///
-/// This is the final pickup threshold; items are attracted at a larger
-/// radius ([`PlayerStats::pickup_radius`]) before being collected here.
-const ITEM_COLLECT_RADIUS: f32 = 8.0;
-
-/// Y coordinate of the "score line" (px above play area centre).
-///
-/// When the player is at or above this height all items on screen are
-/// automatically attracted toward the player, and point items yield their
-/// maximum value.
-const SCORE_LINE_Y: f32 = 192.0;
-
-/// Maximum score awarded by a point item (player at or above the score line).
-pub const POI_BASE_VALUE: u32 = 10_000;
-
-/// Minimum score awarded by a point item (player at the bottom of the play area).
-pub const POI_MIN_VALUE: u32 = 100;
 
 // ---------------------------------------------------------------------------
 // Item spawning
@@ -134,7 +106,8 @@ pub fn on_enemy_defeated(
 /// the player:
 ///
 /// 1. **Score-line auto-attract** — the player's Y is at or above
-///    [`SCORE_LINE_Y`] (192 px). All on-screen items are pulled in.
+///    `score_line_y` from [`GameRulesConfig`] (default 192 px).
+///    All on-screen items are pulled in.
 /// 2. **Proximity attract** — the item is within [`PlayerStats::pickup_radius`]
 ///    of the player.
 ///
@@ -142,7 +115,8 @@ pub fn on_enemy_defeated(
 /// homing until collected or despawned.
 ///
 /// Items that have not been attracted fall downward under constant acceleration
-/// (`fall_speed`) up to a terminal velocity of [`ITEM_MAX_FALL_SPEED`].
+/// (`fall_speed`) up to the terminal velocity configured in
+/// [`GameRulesConfig::item_max_fall_speed`].
 ///
 /// Registered in [`crate::GameSystemSet::Movement`].
 #[allow(clippy::type_complexity)]
@@ -150,13 +124,18 @@ pub fn item_movement_system(
     mut items: Query<(&mut Transform, &mut ItemPhysics)>,
     player: Query<(&Transform, &PlayerStats), (With<Player>, Without<ItemPhysics>)>,
     time: Res<Time>,
+    rules: GameRulesConfigParams,
 ) {
     let dt = time.delta_secs();
+
+    let attract_speed = rules.item_attract_speed();
+    let max_fall_speed = rules.item_max_fall_speed();
+    let score_line_y = rules.score_line_y();
 
     let (player_pos, auto_attract, pickup_radius) = if let Ok((player_tf, stats)) = player.single()
     {
         let pos = player_tf.translation.truncate();
-        (pos, pos.y >= SCORE_LINE_Y, stats.pickup_radius)
+        (pos, pos.y >= score_line_y, stats.pickup_radius)
     } else {
         return;
     };
@@ -177,14 +156,14 @@ pub fn item_movement_system(
                 // frame spike could push the item past the player and outside
                 // the collect radius, causing indefinite ping-ponging.
                 let max_speed = distance / dt;
-                physics.velocity = dir * ITEM_ATTRACT_SPEED.min(max_speed);
+                physics.velocity = dir * attract_speed.min(max_speed);
             } else {
                 physics.velocity = Vec2::ZERO;
             }
         } else {
             // Apply gravity: accelerate downward, cap at terminal velocity.
             physics.velocity.y =
-                (physics.velocity.y - physics.fall_speed * dt).max(ITEM_MAX_FALL_SPEED);
+                (physics.velocity.y - physics.fall_speed * dt).max(max_fall_speed);
         }
 
         tf.translation += (physics.velocity * dt).extend(0.0);
@@ -194,7 +173,8 @@ pub fn item_movement_system(
 /// Collects items that overlap the player and applies their effects.
 ///
 /// An item is collected when the distance between its centre and the player
-/// is ≤ [`ITEM_COLLECT_RADIUS`]. On collection:
+/// is ≤ `item_collect_radius` from [`GameRulesConfig`] (default 8 px).
+/// On collection:
 ///
 /// - The appropriate effect is applied via [`apply_item`].
 /// - The item entity is despawned.
@@ -217,6 +197,7 @@ pub fn item_collection_system(
     player: Query<(&Transform, &PlayerStats), With<Player>>,
     mut game_data: ResMut<GameData>,
     mut tracker: ResMut<FragmentTracker>,
+    rules: GameRulesConfigParams,
 ) {
     let Ok((player_tf, stats)) = player.single() else {
         return;
@@ -224,21 +205,31 @@ pub fn item_collection_system(
     let player_pos = player_tf.translation.truncate();
     let player_y = player_tf.translation.y;
 
-    // Use the larger of hitbox_radius and ITEM_COLLECT_RADIUS so the pickup
-    // zone always covers at least the defined constant.
-    let collect_radius = ITEM_COLLECT_RADIUS.max(stats.hitbox_radius);
+    let item_collect_radius = rules.item_collect_radius();
+
+    // Use the larger of hitbox_radius and item_collect_radius so the pickup
+    // zone always covers at least the defined minimum.
+    let collect_radius = item_collect_radius.max(stats.hitbox_radius);
 
     for (entity, tf, &kind) in &items {
         let item_pos = tf.translation.truncate();
         if item_pos.distance(player_pos) > collect_radius {
             continue;
         }
-        apply_item(&mut game_data, &mut tracker, kind, player_y);
+        apply_item(
+            &mut game_data,
+            &mut tracker,
+            kind,
+            player_y,
+            rules.score_line_y(),
+            rules.poi_base_value(),
+            rules.poi_min_value(),
+        );
         commands.entity(entity).despawn();
     }
 }
 
-/// Applies the gameplay effect of collecting an item and returns the score awarded.
+/// Applies the gameplay effect of collecting an item.
 ///
 /// Called by [`item_collection_system`] for each collected item.
 fn apply_item(
@@ -246,6 +237,9 @@ fn apply_item(
     tracker: &mut FragmentTracker,
     kind: ItemKind,
     player_y: f32,
+    score_line_y: f32,
+    poi_base: u32,
+    poi_min: u32,
 ) {
     match kind {
         ItemKind::PowerSmall => {
@@ -258,7 +252,7 @@ fn apply_item(
             game_data.power = 128;
         }
         ItemKind::PointItem => {
-            let value = calc_point_item_value(player_y);
+            let value = calc_point_item_value(player_y, score_line_y, poi_base, poi_min);
             game_data.score += value as u64;
         }
         ItemKind::LifeFragment => {
@@ -275,38 +269,46 @@ fn apply_item(
 // ---------------------------------------------------------------------------
 
 /// Calculates the score value of a [`ItemKind::PointItem`] based on the
-/// player's current Y position.
+/// player's current Y position and the runtime score parameters.
 ///
-/// Returns [`POI_BASE_VALUE`] when the player is at or above [`SCORE_LINE_Y`],
-/// and linearly interpolates down to [`POI_MIN_VALUE`] at the bottom of the
-/// play area.
+/// Returns `poi_base` when the player is at or above `score_line_y`,
+/// and linearly interpolates down to `poi_min` at the bottom of the play area.
+///
+/// Callers should obtain `score_line_y`, `poi_base`, and `poi_min` from
+/// [`crate::config::GameRulesConfigParams`] so hot-reloaded changes in
+/// `assets/config/game_rules.ron` are reflected at runtime.
 ///
 /// # Arguments
 ///
-/// * `player_y` — the player's world-space Y coordinate.
+/// * `player_y`     — the player's world-space Y coordinate.
+/// * `score_line_y` — Y threshold above which the maximum value is awarded.
+/// * `poi_base`     — score awarded at or above the score line.
+/// * `poi_min`      — score awarded at the bottom of the play area.
 ///
 /// # Examples
 ///
 /// ```rust
-/// use scarlet_core::systems::item::{calc_point_item_value, POI_BASE_VALUE, POI_MIN_VALUE};
+/// use scarlet_core::systems::item::calc_point_item_value;
 ///
 /// // At the score line → maximum value.
-/// assert_eq!(calc_point_item_value(192.0), POI_BASE_VALUE);
+/// assert_eq!(calc_point_item_value(192.0, 192.0, 10_000, 100), 10_000);
+/// // Below play area bottom → minimum value.
+/// assert_eq!(calc_point_item_value(-500.0, 192.0, 10_000, 100), 100);
 /// ```
-pub fn calc_point_item_value(player_y: f32) -> u32 {
+pub fn calc_point_item_value(player_y: f32, score_line_y: f32, poi_base: u32, poi_min: u32) -> u32 {
     // At or above the score line → always maximum.
-    if player_y >= SCORE_LINE_Y {
-        return POI_BASE_VALUE;
+    if player_y >= score_line_y {
+        return poi_base;
     }
 
     // Linear interpolation between the bottom of the play area and the score
     // line.  The bottom of the play area is -PLAY_AREA_HALF_H (= -224).
     const PLAY_AREA_BOTTOM: f32 = -224.0;
-    let range = SCORE_LINE_Y - PLAY_AREA_BOTTOM; // 416
+    let range = score_line_y - PLAY_AREA_BOTTOM;
     let t = ((player_y - PLAY_AREA_BOTTOM) / range).clamp(0.0, 1.0);
 
-    let span = (POI_BASE_VALUE - POI_MIN_VALUE) as f32;
-    (POI_MIN_VALUE as f32 + span * t) as u32
+    let span = poi_base.saturating_sub(poi_min) as f32;
+    (poi_min as f32 + span * t).round() as u32
 }
 
 #[cfg(test)]
@@ -315,38 +317,47 @@ mod tests {
 
     // ---- calc_point_item_value -------------------------------------------
 
+    fn poi(player_y: f32) -> u32 {
+        calc_point_item_value(
+            player_y,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
+        )
+    }
+
     /// At the score line the maximum value must be returned.
     #[test]
     fn point_item_at_score_line_gives_max() {
-        assert_eq!(calc_point_item_value(SCORE_LINE_Y), POI_BASE_VALUE);
+        assert_eq!(poi(DEFAULT_SCORE_LINE_Y), DEFAULT_POI_BASE_VALUE);
     }
 
     /// Above the score line must also give the maximum value.
     #[test]
     fn point_item_above_score_line_gives_max() {
-        assert_eq!(calc_point_item_value(SCORE_LINE_Y + 50.0), POI_BASE_VALUE);
+        assert_eq!(poi(DEFAULT_SCORE_LINE_Y + 50.0), DEFAULT_POI_BASE_VALUE);
     }
 
     /// At the very bottom of the play area the minimum value must be returned.
     #[test]
     fn point_item_at_bottom_gives_min() {
-        assert_eq!(calc_point_item_value(-224.0), POI_MIN_VALUE);
+        assert_eq!(poi(-224.0), DEFAULT_POI_MIN_VALUE);
     }
 
     /// A Y position below the play area must clamp to the minimum value.
     #[test]
     fn point_item_below_play_area_clamps_to_min() {
-        assert_eq!(calc_point_item_value(-500.0), POI_MIN_VALUE);
+        assert_eq!(poi(-500.0), DEFAULT_POI_MIN_VALUE);
     }
 
     /// The value at the midpoint between the bottom and the score line must be
     /// strictly between the min and max.
     #[test]
     fn point_item_at_midpoint_is_between_min_and_max() {
-        let mid = (-224.0 + SCORE_LINE_Y) / 2.0;
-        let v = calc_point_item_value(mid);
-        assert!(v > POI_MIN_VALUE, "midpoint value should exceed minimum");
-        assert!(v < POI_BASE_VALUE, "midpoint value should be below maximum");
+        let mid = (-224.0 + DEFAULT_SCORE_LINE_Y) / 2.0;
+        let v = poi(mid);
+        assert!(v > DEFAULT_POI_MIN_VALUE, "midpoint value should exceed minimum");
+        assert!(v < DEFAULT_POI_BASE_VALUE, "midpoint value should be below maximum");
     }
 
     /// The value must be monotonically non-decreasing as Y increases toward the
@@ -354,7 +365,7 @@ mod tests {
     #[test]
     fn point_item_value_is_monotone() {
         let ys: Vec<f32> = (-10..=10).map(|i| i as f32 * 20.0).collect();
-        let values: Vec<u32> = ys.iter().copied().map(calc_point_item_value).collect();
+        let values: Vec<u32> = ys.iter().copied().map(poi).collect();
         for pair in values.windows(2) {
             assert!(
                 pair[0] <= pair[1],
@@ -383,7 +394,7 @@ mod tests {
     fn power_small_adds_one() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerSmall, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerSmall, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 1);
     }
 
@@ -392,7 +403,7 @@ mod tests {
     fn power_large_adds_eight() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 8);
     }
 
@@ -402,7 +413,7 @@ mod tests {
         let mut gd = make_game_data();
         gd.power = 127;
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::PowerLarge, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 128);
     }
 
@@ -412,17 +423,25 @@ mod tests {
         let mut gd = make_game_data();
         gd.power = 50;
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::FullPower, 0.0);
+        apply_item(&mut gd, &mut tracker, ItemKind::FullPower, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         assert_eq!(gd.power, 128);
     }
 
-    /// PointItem at score line must add POI_BASE_VALUE to score.
+    /// PointItem at score line must add the maximum POI value to score.
     #[test]
     fn point_item_at_score_line_awards_max_score() {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
-        apply_item(&mut gd, &mut tracker, ItemKind::PointItem, SCORE_LINE_Y);
-        assert_eq!(gd.score, POI_BASE_VALUE as u64);
+        apply_item(
+            &mut gd,
+            &mut tracker,
+            ItemKind::PointItem,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_SCORE_LINE_Y,
+            DEFAULT_POI_BASE_VALUE,
+            DEFAULT_POI_MIN_VALUE,
+        );
+        assert_eq!(gd.score, DEFAULT_POI_BASE_VALUE as u64);
     }
 
     /// Four LifeFragments must increment the counter to 4; no extend occurs
@@ -432,7 +451,7 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..4 {
-            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
+            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         }
         assert_eq!(gd.lives, 2, "apply_item must not extend lives");
         assert_eq!(tracker.life_fragments, 4);
@@ -445,7 +464,7 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
-            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0);
+            apply_item(&mut gd, &mut tracker, ItemKind::LifeFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         }
         assert_eq!(gd.lives, 2, "apply_item must not extend lives");
         assert_eq!(tracker.life_fragments, 5);
@@ -458,7 +477,7 @@ mod tests {
         let mut gd = make_game_data();
         let mut tracker = FragmentTracker::default();
         for _ in 0..5 {
-            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0);
+            apply_item(&mut gd, &mut tracker, ItemKind::BombFragment, 0.0, DEFAULT_SCORE_LINE_Y, DEFAULT_POI_BASE_VALUE, DEFAULT_POI_MIN_VALUE);
         }
         assert_eq!(gd.bombs, 3, "apply_item must not modify bombs");
         assert_eq!(tracker.bomb_fragments, 5);

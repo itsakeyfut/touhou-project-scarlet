@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 use crate::{
     components::{bullet::BulletPattern, enemy::Enemy},
+    config::FodderEnemyConfigParams,
     resources::{EnemySpawner, SpawnEntry, StageData},
     systems::danmaku::emitter::SpiralState,
 };
@@ -40,6 +41,7 @@ pub fn enemy_spawner_system(
     mut commands: Commands,
     mut spawner: ResMut<EnemySpawner>,
     stage_data: Res<StageData>,
+    fodder_cfg: FodderEnemyConfigParams,
 ) {
     let elapsed = stage_data.elapsed_time;
 
@@ -48,28 +50,31 @@ pub fn enemy_spawner_system(
             break;
         }
 
-        spawn_enemy(&mut commands, entry);
+        spawn_enemy(&mut commands, entry, &fodder_cfg);
         spawner.index += 1;
     }
 }
 
 /// Spawns a single enemy entity from a [`SpawnEntry`].
-fn spawn_enemy(commands: &mut Commands, entry: &SpawnEntry) {
+fn spawn_enemy(commands: &mut Commands, entry: &SpawnEntry, fodder_cfg: &FodderEnemyConfigParams) {
     let kind = entry.kind;
+    let hp = fodder_cfg.hp_for(kind);
+    let radius = fodder_cfg.radius_for(kind);
+    let score = fodder_cfg.score_for(kind);
 
     let mut entity = commands.spawn((
         Enemy {
-            hp: kind.base_hp(),
-            hp_max: kind.base_hp(),
-            collision_radius: kind.collision_radius(),
-            score_value: kind.score_value(),
+            hp,
+            hp_max: hp,
+            collision_radius: radius,
+            score_value: score,
             is_boss: false,
         },
         kind,
         entry.movement.clone(),
         Sprite {
             color: kind.color(),
-            custom_size: Some(Vec2::splat(kind.collision_radius() * 2.0)),
+            custom_size: Some(Vec2::splat(radius * 2.0)),
             ..default()
         },
         Transform::from_translation(entry.position.extend(1.0)),

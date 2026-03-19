@@ -1,0 +1,32 @@
+// Player configuration — movement speed, collision radii, fire rate, and starting values.
+//
+// These values are used every time a new run starts (OnEnter Playing).
+// Hot-reloading this file takes effect the next time the player entity is spawned;
+// in-progress runs are unaffected.
+//
+// Fields:
+// - speed:                Normal movement speed in pixels per second
+// - slow_speed:           Focus (slow) movement speed while Shift is held
+// - hitbox_radius:        Bullet-collision hitbox radius in pixels
+// - graze_radius:         Graze detection radius in pixels
+// - pickup_radius:        Item-attraction trigger radius in pixels
+// - shoot_interval_secs:  Seconds between consecutive shots (1/rate)
+// - bullet_damage:        Damage dealt by each player bullet on contact
+// - invincibility_secs:   Post-hit invincibility window duration in seconds
+// - initial_lives:        Lives at the start of a new game
+// - initial_bombs:        Bomb stocks at the start of a new game
+// - initial_power:        Power level at the start of a new game (0–128)
+
+PlayerConfig(
+    speed:               200.0,
+    slow_speed:          100.0,
+    hitbox_radius:         2.0,
+    graze_radius:         16.0,
+    pickup_radius:        24.0,
+    shoot_interval_secs:   0.1,   // 10 shots / second
+    bullet_damage:        12.0,
+    invincibility_secs:    3.0,
+    initial_lives:           2,
+    initial_bombs:           3,
+    initial_power:           0,
+)

@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 pub mod components;
+pub mod config;
 pub mod constants;
 pub mod debug;
 pub mod events;
@@ -26,6 +27,12 @@ pub use resources::{
     BOMB_EXTEND_FRAGMENTS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
     SpawnEntry, StageData,
 };
+pub use config::{
+    EnemyBulletConfig, EnemyBulletConfigHandle, EnemyBulletConfigParams, FodderEnemyConfig,
+    FodderEnemyConfigHandle, FodderEnemyConfigParams, GameRulesConfig, GameRulesConfigHandle,
+    GameRulesConfigParams, PlayerBulletConfig, PlayerBulletConfigHandle, PlayerBulletConfigParams,
+    PlayerConfig, PlayerConfigHandle, PlayerConfigParams, ScarletConfigPlugin,
+};
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;
 pub use systems::collision::check_circle_collision;
@@ -39,6 +46,10 @@ pub struct ScarletCorePlugin;
 
 impl Plugin for ScarletCorePlugin {
     fn build(&self, app: &mut App) {
+        // Config plugin must be registered first so asset loaders and handles
+        // are available before any system tries to access them.
+        app.add_plugins(config::ScarletConfigPlugin);
+
         app.add_plugins(shaders::ScarletShadersPlugin);
 
         app.init_state::<AppState>();
