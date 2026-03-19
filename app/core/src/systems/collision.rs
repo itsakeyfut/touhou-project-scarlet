@@ -9,7 +9,7 @@ use crate::{
         player::{InvincibilityTimer, Player, PlayerStats},
     },
     constants::PLAY_AREA_HALF_H,
-    events::{GrazeEvent, PlayerHitEvent},
+    events::{EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
     resources::GameData,
     states::AppState,
 };
@@ -74,6 +74,7 @@ pub fn player_bullet_hit_enemy(
     mut commands: Commands,
     bullets: Query<(Entity, &Transform, &PlayerBullet)>,
     mut enemies: Query<(Entity, &Transform, &mut Enemy)>,
+    mut defeated_events: MessageWriter<EnemyDefeatedEvent>,
 ) {
     // Track entities already consumed this frame (commands are deferred,
     // so despawns are not applied until after the system completes).
@@ -107,6 +108,11 @@ pub fn player_bullet_hit_enemy(
                 hit_bullets.insert(bullet_entity);
 
                 if enemy.hp <= 0.0 {
+                    defeated_events.write(EnemyDefeatedEvent {
+                        position: enemy_pos,
+                        score: enemy.score_value,
+                        is_boss: enemy.score_value >= 500,
+                    });
                     commands.entity(enemy_entity).despawn();
                     hit_enemies.insert(enemy_entity);
                 }

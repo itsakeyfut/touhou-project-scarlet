@@ -12,16 +12,17 @@ pub mod systems;
 
 pub use components::{
     BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, Enemy,
-    EnemyBullet, EnemyBulletKind, GrazeVisual, InvincibilityTimer, Player, PlayerBullet,
-    PlayerStats, ShootTimer,
+    EnemyBullet, EnemyBulletKind, GrazeVisual, InvincibilityTimer, ItemKind, ItemPhysics, Player,
+    PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
-pub use events::{GrazeEvent, PlayerHitEvent, ShootEvent};
+pub use events::{EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent, ShootEvent};
 pub use game_set::GameSystemSet;
-pub use resources::GameData;
+pub use resources::{BOMB_EXTEND_FRAGMENTS, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS};
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;
 pub use systems::collision::check_circle_collision;
+pub use systems::item::calc_point_item_value;
 
 /// Core game plugin.
 ///
@@ -39,9 +40,11 @@ impl Plugin for ScarletCorePlugin {
         app.add_message::<ShootEvent>();
         app.add_message::<PlayerHitEvent>();
         app.add_message::<GrazeEvent>();
+        app.add_message::<EnemyDefeatedEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
+        app.insert_resource(FragmentTracker::default());
 
         // System set ordering — all sets run only while Playing.
         app.configure_sets(
@@ -97,9 +100,14 @@ impl Plugin for ScarletCorePlugin {
                 .in_set(GameSystemSet::Collision),
         );
 
+        // GameLogic systems — run after Collision so events are visible.
         app.add_systems(
             Update,
-            systems::collision::handle_player_hit.in_set(GameSystemSet::GameLogic),
+            (
+                systems::collision::handle_player_hit,
+                systems::item::on_enemy_defeated,
+            )
+                .in_set(GameSystemSet::GameLogic),
         );
 
         app.add_systems(
