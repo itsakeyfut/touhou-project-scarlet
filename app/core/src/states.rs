@@ -4,6 +4,9 @@ use bevy::prelude::*;
 ///
 /// State transitions:
 /// ```text
+/// Loading → Playing (once all RON configs are ready — see wait_for_configs)
+///
+/// Full future flow (UI screens not yet implemented):
 /// Title → CharacterSelect → DifficultySelect → Loading → Playing
 ///                                                          ↓      ↓      ↓
 ///                                                       Paused StageClear GameOver
@@ -12,15 +15,20 @@ use bevy::prelude::*;
 /// ```
 #[derive(States, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub enum AppState {
-    /// Main title screen (default starting state).
+    /// Asset / config loading screen (default starting state).
+    ///
+    /// [`crate::systems::loading::wait_for_configs`] transitions to
+    /// [`AppState::Playing`] once every RON config file has finished loading.
+    /// Future phases will insert Title/CharacterSelect/DifficultySelect before
+    /// this state.
     #[default]
+    Loading,
+    /// Main title screen (not yet implemented — placeholder for future phase).
     Title,
     /// Character and shot-type selection screen.
     CharacterSelect,
     /// Difficulty selection screen (Easy / Normal / Hard / Lunatic / Extra / Phantasm).
     DifficultySelect,
-    /// Asset loading screen; transitions to Playing once all assets are ready.
-    Loading,
     /// Active gameplay.
     Playing,
     /// Pause overlay shown over the game (ESC to toggle).

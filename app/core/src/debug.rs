@@ -12,8 +12,10 @@ use crate::{
 
 /// Immediately transitions to [`AppState::Playing`] on startup.
 ///
-/// Skips the title / character-select flow so developers can test gameplay
-/// without implementing UI screens first. Only active with `debug-hitbox`.
+/// Bypasses both the future title/character-select screens *and* the
+/// [`crate::systems::loading::wait_for_configs`] readiness check, so the
+/// game enters gameplay instantly using `DEFAULT_*` fallback values while
+/// configs finish loading in the background. Only active with `debug-hitbox`.
 pub fn debug_skip_to_playing(mut next_state: ResMut<NextState<AppState>>) {
     next_state.set(AppState::Playing);
 }
