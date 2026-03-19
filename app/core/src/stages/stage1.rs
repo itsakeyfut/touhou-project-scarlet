@@ -5,21 +5,28 @@ use crate::{
         bullet::{BulletEmitter, BulletPattern, EnemyBulletKind},
         enemy::{EnemyKind, EnemyMovement},
     },
-    resources::{EnemySpawner, SpawnEntry},
+    constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
+    resources::{EnemySpawner, SpawnEntry, StageData},
 };
 
 // ---------------------------------------------------------------------------
 // Spawn helpers
 // ---------------------------------------------------------------------------
 
-/// Spawn Y just above the visible play area (top edge is +224).
-const TOP: f32 = 290.0;
+/// Extra margin above the top edge before spawning (px).
+const TOP_MARGIN: f32 = 66.0;
 
-/// Spawn X beyond the left edge of the play area (left edge is -192).
-const LEFT: f32 = -230.0;
+/// Extra margin beyond each side edge before spawning (px).
+const SIDE_MARGIN: f32 = 38.0;
 
-/// Spawn X beyond the right edge of the play area (right edge is +192).
-const RIGHT: f32 = 230.0;
+/// Spawn Y just above the visible play area.
+const TOP: f32 = PLAY_AREA_HALF_H + TOP_MARGIN;
+
+/// Spawn X beyond the left edge of the play area.
+const LEFT: f32 = -(PLAY_AREA_HALF_W + SIDE_MARGIN);
+
+/// Spawn X beyond the right edge of the play area.
+const RIGHT: f32 = PLAY_AREA_HALF_W + SIDE_MARGIN;
 
 /// Creates an [`BulletEmitter`] for a typical normal fairy (aimed spread, slow fire rate).
 fn fairy_emitter() -> BulletEmitter {
@@ -670,11 +677,15 @@ pub fn stage1_script() -> Vec<SpawnEntry> {
 /// Loads the Stage 1 script into [`EnemySpawner`] when gameplay starts.
 ///
 /// Registered as an [`OnEnter`](`bevy::prelude::OnEnter`)(`AppState::Playing`)
-/// system. Resets the spawner's index so that restarting from the title screen
-/// replays the full script.
-pub fn load_stage1_system(mut spawner: ResMut<EnemySpawner>) {
+/// system. Resets both the spawner and [`StageData`] so that returning to the
+/// title screen and restarting replays the full script from time zero without
+/// fast-forwarding or skipping boss logic.
+pub fn load_stage1_system(mut spawner: ResMut<EnemySpawner>, mut stage_data: ResMut<StageData>) {
     spawner.script = stage1_script();
     spawner.index = 0;
+    stage_data.elapsed_time = 0.0;
+    stage_data.boss_active = false;
+    stage_data.boss_defeated = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -715,14 +726,14 @@ mod tests {
         );
     }
 
-    /// Last entry must be before the 120-second mark.
+    /// Last entry must be at or before the 100-second stage window.
     #[test]
-    fn last_entry_before_two_minutes() {
+    fn last_entry_stays_within_stage_window() {
         let script = stage1_script();
         let last_time = script.last().unwrap().time;
         assert!(
-            last_time < 120.0,
-            "last spawn at t={last_time} exceeds 2-minute cap"
+            last_time <= 100.0,
+            "last spawn at t={last_time} exceeds the 100-second stage window"
         );
     }
 
