@@ -166,12 +166,24 @@ pub fn item_movement_system(
 
     for (mut tf, mut physics) in &mut items {
         let item_pos = tf.translation.truncate();
+        let to_player = player_pos - item_pos;
+        let distance = to_player.length();
 
-        if physics.attracted || auto_attract || item_pos.distance(player_pos) <= pickup_radius {
+        if physics.attracted || auto_attract || distance <= pickup_radius {
             // Switch to attracted mode and home toward the player.
             physics.attracted = true;
-            let dir = (player_pos - item_pos).normalize_or(Vec2::Y);
-            physics.velocity = dir * ITEM_ATTRACT_SPEED;
+
+            if distance > 0.0 {
+                let dir = to_player / distance;
+                // Clamp speed so this frame's displacement cannot exceed the
+                // remaining distance to the player. Without this clamp, a
+                // frame spike could push the item past the player and outside
+                // the collect radius, causing indefinite ping-ponging.
+                let max_speed = distance / dt;
+                physics.velocity = dir * ITEM_ATTRACT_SPEED.min(max_speed);
+            } else {
+                physics.velocity = Vec2::ZERO;
+            }
         } else {
             // Apply gravity: accelerate downward, cap at terminal velocity.
             physics.velocity.y =
