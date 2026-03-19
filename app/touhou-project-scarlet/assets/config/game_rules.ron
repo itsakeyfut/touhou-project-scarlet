@@ -1,0 +1,35 @@
+// Game-rules configuration — item physics, score constants, and extend thresholds.
+//
+// Hot-reloading this file takes effect within one frame; no restart required.
+//
+// Item physics:
+// - item_attract_speed:    Speed at which attracted items home toward the player (px/s)
+//                          Must exceed item_max_fall_speed (absolute value) so items
+//                          visibly accelerate upward when attracted.
+// - item_max_fall_speed:   Terminal downward fall speed for un-attracted items (px/s, negative)
+// - item_collect_radius:   Distance at which the player collects an item (px)
+//
+// Score constants:
+// - score_line_y:          Y coordinate (px) at or above which items auto-attract
+//                          and point items yield their maximum value
+// - poi_base_value:        Score awarded by a point item at / above the score line
+// - poi_min_value:         Score awarded by a point item at the bottom of the play area
+//
+// Fragment-extend thresholds:
+// - life_extend_fragments:  Fragments needed for a 1-UP
+// - bomb_extend_fragments:  Fragments needed for an extra bomb
+// - max_bombs:              Maximum bomb stock the player can hold
+
+GameRulesConfig(
+    item_attract_speed:    400.0,
+    item_max_fall_speed:  -200.0,
+    item_collect_radius:     8.0,
+
+    score_line_y:          192.0,
+    poi_base_value:        10000,
+    poi_min_value:           100,
+
+    life_extend_fragments:     5,
+    bomb_extend_fragments:     5,
+    max_bombs:                 3,
+)

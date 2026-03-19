@@ -5,19 +5,34 @@ use crate::{
         bullet::ShootTimer,
         player::{InvincibilityTimer, Player, PlayerStats},
     },
+    config::PlayerConfigParams,
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
     events::ShootEvent,
 };
 
 /// Spawns the player entity at the bottom-center of the play area.
 ///
+/// Stats and fire rate are read from [`PlayerConfigParams`] (loaded from
+/// `assets/config/player.ron`).  Falls back to [`PlayerStats::default`] and
+/// [`ShootTimer::default`] if the config has not finished loading yet.
+///
 /// Uses a placeholder colored rectangle until real sprites are added in Phase 19.
 /// [`ShootTimer`] is attached here so the firing rate is tracked per-player.
-pub fn spawn_player(mut commands: Commands) {
+pub fn spawn_player(mut commands: Commands, player_cfg: PlayerConfigParams) {
+    let cfg = player_cfg.get_or_default();
+
     commands.spawn((
         Player,
-        PlayerStats::default(),
-        ShootTimer::default(),
+        PlayerStats {
+            speed: cfg.speed,
+            slow_speed: cfg.slow_speed,
+            hitbox_radius: cfg.hitbox_radius,
+            graze_radius: cfg.graze_radius,
+            pickup_radius: cfg.pickup_radius,
+        },
+        ShootTimer {
+            timer: Timer::from_seconds(cfg.shoot_interval_secs, TimerMode::Repeating),
+        },
         Sprite {
             color: Color::srgb(1.0, 0.3, 0.3),
             custom_size: Some(Vec2::splat(16.0)),

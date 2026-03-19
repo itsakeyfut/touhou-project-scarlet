@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 pub mod components;
+pub mod config;
 pub mod constants;
 pub mod debug;
 pub mod events;
@@ -25,6 +26,10 @@ pub use game_set::GameSystemSet;
 pub use resources::{
     BOMB_EXTEND_FRAGMENTS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
     SpawnEntry, StageData,
+};
+pub use config::{
+    GameRulesConfig, GameRulesConfigHandle, GameRulesConfigParams, PlayerConfig,
+    PlayerConfigHandle, PlayerConfigParams, ScarletConfigPlugin,
 };
 pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
 pub use states::AppState;
