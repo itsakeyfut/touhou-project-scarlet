@@ -91,6 +91,7 @@ impl Plugin for ScarletCorePlugin {
             (
                 systems::collision::player_bullet_hit_enemy,
                 systems::collision::player_hit_detection,
+                systems::collision::graze_detection_system,
             )
                 .in_set(GameSystemSet::Collision),
         );
