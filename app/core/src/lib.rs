@@ -137,9 +137,16 @@ impl Plugin for ScarletCorePlugin {
                 .in_set(GameSystemSet::GameLogic),
         );
 
+        // StageControl systems — stage_control runs first to update elapsed_time,
+        // then enemy_spawner uses the fresh time to process the script.
         app.add_systems(
             Update,
-            systems::stage::stage_control_system.in_set(GameSystemSet::StageControl),
+            (
+                systems::stage::stage_control_system,
+                systems::enemy::spawner::enemy_spawner_system,
+            )
+                .chain()
+                .in_set(GameSystemSet::StageControl),
         );
 
         app.add_systems(
