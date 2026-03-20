@@ -47,13 +47,13 @@ pub struct HitFlashMaterial {
     pub flash_intensity: f32,
     /// Padding — not used by the shader.
     #[uniform(0)]
-    pub _pad0: f32,
+    _pad0: f32,
     /// Padding — not used by the shader.
     #[uniform(0)]
-    pub _pad1: f32,
+    _pad1: f32,
     /// Padding — not used by the shader.
     #[uniform(0)]
-    pub _pad2: f32,
+    _pad2: f32,
 }
 
 impl Default for HitFlashMaterial {
