@@ -1,8 +1,10 @@
+pub mod boss;
 pub mod bullet;
 pub mod enemy;
 pub mod item;
 pub mod player;
 
+pub use boss::{Boss, BossMovement, BossPhaseData, BossType};
 pub use bullet::{
     BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet,
     EnemyBulletKind, PlayerBullet, ShootTimer,
