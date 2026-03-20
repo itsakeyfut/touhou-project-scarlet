@@ -131,6 +131,10 @@ impl Plugin for ScarletCorePlugin {
         )
         .add_systems(
             Update,
+            systems::boss::movement::boss_movement_system.in_set(GameSystemSet::Movement),
+        )
+        .add_systems(
+            Update,
             systems::bullet::despawn_out_of_bounds_system.in_set(GameSystemSet::Cleanup),
         )
         .add_systems(
