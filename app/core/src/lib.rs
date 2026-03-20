@@ -139,11 +139,26 @@ impl Plugin for ScarletCorePlugin {
         );
 
         // Collision systems.
+        //
+        // player_bullet_hit_enemy and player_bullet_hit_boss are chained with
+        // apply_deferred between them: both query bullets immutably and mutate
+        // different components (Enemy vs Boss), so Bevy would otherwise run them
+        // in parallel. A bullet despawned by the first system must be flushed
+        // before the second system runs, preventing the same bullet from
+        // registering a hit against both a regular enemy and a boss.
         app.add_systems(
             Update,
             (
                 systems::collision::player_bullet_hit_enemy,
+                ApplyDeferred,
                 systems::collision::player_bullet_hit_boss,
+            )
+                .chain()
+                .in_set(GameSystemSet::Collision),
+        );
+        app.add_systems(
+            Update,
+            (
                 systems::collision::player_hit_detection,
                 systems::collision::graze_detection_system,
             )

@@ -134,14 +134,16 @@ pub fn player_bullet_hit_enemy(
 ///
 /// # Ordering note
 ///
-/// Runs alongside [`player_bullet_hit_enemy`] in [`crate::GameSystemSet::Collision`].
-/// A bullet that hits a boss will **not** also hit a regular enemy on the same
-/// frame because bullets are despawned immediately via [`Commands`] and the
-/// `hit_bullets` set prevents the same bullet entity from registering two hits.
-/// However, since `Commands` are deferred until the system finishes, the same
-/// bullet *could* register hits in both systems if they run in parallel. The
-/// systems are added in a tuple (unordered within the set) but share no mutable
-/// queries, so Bevy will not parallelise them in a way that causes double-hits.
+/// Runs **after** [`player_bullet_hit_enemy`] with an explicit `apply_deferred`
+/// between them (see [`crate::ScarletCorePlugin`]).
+///
+/// Without this ordering both systems would run in parallel because they query
+/// bullets immutably and mutate different components (`Enemy` vs `Boss`). Since
+/// bullet despawns are deferred via [`Commands`], a bullet that already hit an
+/// enemy would still appear in the query when this system runs, potentially
+/// registering a double-hit. The `apply_deferred` barrier flushes all pending
+/// despawn commands before this system executes, so spent bullets are no longer
+/// visible in the query.
 ///
 /// Registered in [`crate::GameSystemSet::Collision`].
 pub fn player_bullet_hit_boss(
