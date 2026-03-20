@@ -69,7 +69,7 @@ pub fn check_circle_collision(pos_a: Vec2, radius_a: f32, pos_b: Vec2, radius_b:
 pub fn player_bullet_hit_enemy(
     mut commands: Commands,
     bullets: Query<(Entity, &Transform, &PlayerBullet)>,
-    mut enemies: Query<(Entity, &Transform, &mut Enemy)>,
+    mut enemies: Query<(Entity, &Transform, &mut Enemy), Without<Boss>>,
     mut defeated_events: MessageWriter<EnemyDefeatedEvent>,
     bullet_cfg: PlayerBulletConfigParams,
 ) {
