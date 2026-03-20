@@ -4,8 +4,11 @@ use crate::game_set::GameSystemSet;
 
 use crate::{
     components::player::{GrazeVisual, Player},
-    events::GrazeEvent,
-    shaders::{BulletGlowMaterial, BulletTrailMaterial, GrazeMaterial},
+    events::{BossHitEvent, GrazeEvent},
+    shaders::{
+        BulletGlowMaterial, BulletTrailMaterial, GrazeMaterial, HitFlashMaterial,
+        SpellCardBgMaterial, SpellCardBackground,
+    },
     states::AppState,
 };
 
@@ -30,10 +33,28 @@ impl Plugin for ScarletShadersPlugin {
         // Phase 05 materials.
         app.add_plugins(Material2dPlugin::<GrazeMaterial>::default());
 
+        // Phase 08 materials.
+        app.add_plugins(Material2dPlugin::<HitFlashMaterial>::default())
+            .add_plugins(Material2dPlugin::<SpellCardBgMaterial>::default());
+
         // Uniform time updates — only while the game is running.
         app.add_systems(
             Update,
             (update_bullet_glow_time, update_bullet_trail_time).run_if(in_state(AppState::Playing)),
+        );
+
+        // Hit-flash systems — trigger on BossHitEvent, then decay each frame.
+        app.add_systems(
+            Update,
+            (trigger_boss_hit_flash, update_hit_flash)
+                .chain()
+                .in_set(GameSystemSet::Effects),
+        );
+
+        // Spell-card background time uniform update.
+        app.add_systems(
+            Update,
+            update_spell_card_bg_time.run_if(in_state(AppState::Playing)),
         );
 
         // Graze field visual — spawn once when the player entity appears,
@@ -49,7 +70,6 @@ impl Plugin for ScarletShadersPlugin {
                 .run_if(in_state(AppState::Playing)),
         );
 
-        // TODO(phase-08): add Material2dPlugin::<SpellCardBgMaterial>, HitFlashMaterial
         // TODO(phase-09): add Material2dPlugin::<BombReimuMaterial>, BombMarisaMaterial
         // TODO(phase-12): add Material2dPlugin::<PixelOutlineMaterial>
     }
@@ -151,5 +171,67 @@ pub fn update_graze_material(
         } else {
             mat.graze_intensity = (mat.graze_intensity - time.delta_secs() * 5.0).max(0.0);
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Hit-flash systems
+// ---------------------------------------------------------------------------
+
+/// Sets `flash_intensity = 1.0` on every [`HitFlashMaterial`] belonging to a
+/// boss entity that received a [`BossHitEvent`] this frame.
+///
+/// Runs in [`GameSystemSet::Effects`] (after Collision so events are visible).
+/// [`update_hit_flash`] is chained after this system to begin the decay
+/// immediately on the same frame.
+pub fn trigger_boss_hit_flash(
+    mut hit_events: MessageReader<BossHitEvent>,
+    bosses: Query<&MeshMaterial2d<HitFlashMaterial>>,
+    mut flash_materials: ResMut<Assets<HitFlashMaterial>>,
+) {
+    for event in hit_events.read() {
+        let Ok(handle) = bosses.get(event.entity) else {
+            continue;
+        };
+        if let Some(mat) = flash_materials.get_mut(handle) {
+            mat.flash_intensity = 1.0;
+        }
+    }
+}
+
+/// Fades `flash_intensity` toward `0.0` at `8.0 units/s` on every
+/// [`HitFlashMaterial`] instance, producing a ≈ 0.125 s white-flash effect.
+///
+/// Chained after [`trigger_boss_hit_flash`] in [`GameSystemSet::Effects`].
+pub fn update_hit_flash(time: Res<Time>, mut flash_materials: ResMut<Assets<HitFlashMaterial>>) {
+    let decay = time.delta_secs() * 8.0;
+    for (_, mat) in flash_materials.iter_mut() {
+        mat.flash_intensity = (mat.flash_intensity - decay).max(0.0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Spell-card background time updater
+// ---------------------------------------------------------------------------
+
+/// Advances `time` and fades `intensity` toward `1.0` on every
+/// [`SpellCardBgMaterial`] instance that backs a [`SpellCardBackground`] entity.
+///
+/// `intensity` increases at `2.0 units/s` (≈ 0.5 s fade-in from zero).
+/// Runs unconditionally while [`AppState::Playing`] so the animation is
+/// smooth even if the boss phase timer is paused.
+pub fn update_spell_card_bg_time(
+    time: Res<Time>,
+    bg_entities: Query<&MeshMaterial2d<SpellCardBgMaterial>, With<SpellCardBackground>>,
+    mut spell_materials: ResMut<Assets<SpellCardBgMaterial>>,
+) {
+    let t = time.elapsed_secs();
+    let dt = time.delta_secs();
+    for handle in &bg_entities {
+        let Some(mat) = spell_materials.get_mut(handle) else {
+            continue;
+        };
+        mat.time = t;
+        mat.intensity = (mat.intensity + dt * 2.0).min(1.0);
     }
 }
