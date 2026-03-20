@@ -99,6 +99,19 @@ pub struct BossPhaseChangedEvent {
     pub phase: usize,
 }
 
+/// Fired when a player bullet lands a hit on a boss entity.
+///
+/// Emitted by [`crate::systems::collision::player_bullet_hit_boss`] once per
+/// bullet that connects. Consumed by:
+/// - The `HitFlashMaterial` system (Issue #62) to trigger the white-flash
+///   animation on the boss sprite.
+/// - Future audio systems to play the hit sound effect.
+#[derive(Event, Message)]
+pub struct BossHitEvent {
+    /// The boss entity that was hit.
+    pub entity: Entity,
+}
+
 /// Fired when an enemy bullet newly enters the player's graze zone (16 px).
 ///
 /// Consumed by [`crate::shaders::plugin::update_graze_material`] to trigger

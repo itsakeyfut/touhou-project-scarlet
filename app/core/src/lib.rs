@@ -26,8 +26,8 @@ pub use config::{
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::{
-    BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent, ExtendKind,
-    GrazeEvent, PlayerHitEvent, ShootEvent,
+    BossHitEvent, BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent,
+    ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
 };
 pub use game_set::GameSystemSet;
 pub use resources::{
@@ -63,6 +63,7 @@ impl Plugin for ScarletCorePlugin {
         app.add_message::<ExtendEvent>();
         app.add_message::<BossSpawnEvent>();
         app.add_message::<BossPhaseChangedEvent>();
+        app.add_message::<BossHitEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
@@ -142,6 +143,7 @@ impl Plugin for ScarletCorePlugin {
             Update,
             (
                 systems::collision::player_bullet_hit_enemy,
+                systems::collision::player_bullet_hit_boss,
                 systems::collision::player_hit_detection,
                 systems::collision::graze_detection_system,
             )
