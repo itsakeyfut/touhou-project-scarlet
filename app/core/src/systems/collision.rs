@@ -4,13 +4,14 @@ use bevy::prelude::*;
 
 use crate::{
     components::{
+        boss::Boss,
         bullet::{EnemyBullet, EnemyBulletKind, PlayerBullet},
         enemy::Enemy,
         player::{InvincibilityTimer, Player, PlayerStats},
     },
     config::{EnemyBulletConfigParams, PlayerBulletConfigParams, PlayerConfigParams},
     constants::PLAY_AREA_HALF_H,
-    events::{EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
+    events::{BossHitEvent, EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
     resources::GameData,
     states::AppState,
 };
@@ -68,7 +69,7 @@ pub fn check_circle_collision(pos_a: Vec2, radius_a: f32, pos_b: Vec2, radius_b:
 pub fn player_bullet_hit_enemy(
     mut commands: Commands,
     bullets: Query<(Entity, &Transform, &PlayerBullet)>,
-    mut enemies: Query<(Entity, &Transform, &mut Enemy)>,
+    mut enemies: Query<(Entity, &Transform, &mut Enemy), Without<Boss>>,
     mut defeated_events: MessageWriter<EnemyDefeatedEvent>,
     bullet_cfg: PlayerBulletConfigParams,
 ) {
@@ -111,6 +112,67 @@ pub fn player_bullet_hit_enemy(
                     hit_enemies.insert(enemy_entity);
                 }
 
+                // Bullet is spent — move on to the next bullet.
+                break;
+            }
+        }
+    }
+}
+
+/// Detects collisions between player bullets and [`Boss`] entities.
+///
+/// For each active player bullet a scan over all boss entities is performed.
+/// When a hit is detected:
+///
+/// - The bullet is despawned (one bullet can only hit one target per frame).
+/// - `boss.current_mut().hp` is reduced by [`PlayerBullet::damage`].
+/// - A [`BossHitEvent`] is emitted so the `HitFlashMaterial` system (Issue #62)
+///   can trigger the white-flash animation on the boss sprite.
+///
+/// The boss hitbox radius comes from [`Enemy::collision_radius`] on the same
+/// entity (boss entities carry both [`Boss`] and [`Enemy`] components).
+///
+/// # Ordering note
+///
+/// Runs **after** [`player_bullet_hit_enemy`] with an explicit `apply_deferred`
+/// between them (see [`crate::ScarletCorePlugin`]).
+///
+/// Without this ordering both systems would run in parallel because they query
+/// bullets immutably and mutate different components (`Enemy` vs `Boss`). Since
+/// bullet despawns are deferred via [`Commands`], a bullet that already hit an
+/// enemy would still appear in the query when this system runs, potentially
+/// registering a double-hit. The `apply_deferred` barrier flushes all pending
+/// despawn commands before this system executes, so spent bullets are no longer
+/// visible in the query.
+///
+/// Registered in [`crate::GameSystemSet::Collision`].
+pub fn player_bullet_hit_boss(
+    mut commands: Commands,
+    bullets: Query<(Entity, &Transform, &PlayerBullet)>,
+    mut bosses: Query<(Entity, &Transform, &mut Boss, &Enemy)>,
+    mut boss_hit_events: MessageWriter<BossHitEvent>,
+    bullet_cfg: PlayerBulletConfigParams,
+) {
+    let bullet_radius = bullet_cfg.collision_radius();
+    let mut hit_bullets: HashSet<Entity> = HashSet::new();
+
+    for (bullet_entity, bullet_tf, player_bullet) in &bullets {
+        if hit_bullets.contains(&bullet_entity) {
+            continue;
+        }
+
+        let bullet_pos = bullet_tf.translation.truncate();
+
+        for (boss_entity, boss_tf, mut boss, enemy) in &mut bosses {
+            let boss_pos = boss_tf.translation.truncate();
+
+            if check_circle_collision(bullet_pos, bullet_radius, boss_pos, enemy.collision_radius) {
+                boss.current_mut().hp -= player_bullet.damage;
+                commands.entity(bullet_entity).despawn();
+                hit_bullets.insert(bullet_entity);
+                boss_hit_events.write(BossHitEvent {
+                    entity: boss_entity,
+                });
                 // Bullet is spent — move on to the next bullet.
                 break;
             }
@@ -336,6 +398,32 @@ mod tests {
             check_circle_collision(a.0, a.1, b.0, b.1),
             check_circle_collision(b.0, b.1, a.0, a.1)
         );
+    }
+
+    // ---- player_bullet_hit_boss logic ------------------------------------
+
+    /// Bullet entirely inside the boss hitbox must register as a collision.
+    #[test]
+    fn bullet_inside_boss_hitbox_collides() {
+        // Boss at origin with radius 20; bullet at (5, 0) with radius 3.
+        assert!(check_circle_collision(
+            Vec2::new(5.0, 0.0),
+            3.0,
+            Vec2::ZERO,
+            20.0
+        ));
+    }
+
+    /// Bullet far outside the boss hitbox must not collide.
+    #[test]
+    fn bullet_outside_boss_hitbox_no_collision() {
+        // Boss at origin with radius 20; bullet at (30, 0) with radius 3.
+        assert!(!check_circle_collision(
+            Vec2::new(30.0, 0.0),
+            3.0,
+            Vec2::ZERO,
+            20.0
+        ));
     }
 
     // ---- graze duplicate-prevention logic ---------------------------------

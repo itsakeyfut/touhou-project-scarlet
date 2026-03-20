@@ -26,8 +26,8 @@ pub use config::{
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::{
-    BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent, ExtendKind,
-    GrazeEvent, PlayerHitEvent, ShootEvent,
+    BossHitEvent, BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent,
+    ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
 };
 pub use game_set::GameSystemSet;
 pub use resources::{
@@ -63,6 +63,7 @@ impl Plugin for ScarletCorePlugin {
         app.add_message::<ExtendEvent>();
         app.add_message::<BossSpawnEvent>();
         app.add_message::<BossPhaseChangedEvent>();
+        app.add_message::<BossHitEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
@@ -138,10 +139,26 @@ impl Plugin for ScarletCorePlugin {
         );
 
         // Collision systems.
+        //
+        // player_bullet_hit_enemy and player_bullet_hit_boss are chained with
+        // apply_deferred between them: both query bullets immutably and mutate
+        // different components (Enemy vs Boss), so Bevy would otherwise run them
+        // in parallel. A bullet despawned by the first system must be flushed
+        // before the second system runs, preventing the same bullet from
+        // registering a hit against both a regular enemy and a boss.
         app.add_systems(
             Update,
             (
                 systems::collision::player_bullet_hit_enemy,
+                ApplyDeferred,
+                systems::collision::player_bullet_hit_boss,
+            )
+                .chain()
+                .in_set(GameSystemSet::Collision),
+        );
+        app.add_systems(
+            Update,
+            (
                 systems::collision::player_hit_detection,
                 systems::collision::graze_detection_system,
             )
