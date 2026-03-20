@@ -6,5 +6,6 @@ pub mod enemy;
 pub mod item;
 pub mod loading;
 pub mod player;
+pub mod reset;
 pub mod score;
 pub mod stage;
