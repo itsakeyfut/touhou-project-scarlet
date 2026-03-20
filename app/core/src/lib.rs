@@ -34,7 +34,9 @@ pub use resources::{
     BOMB_EXTEND_FRAGMENTS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
     SpawnEntry, StageData,
 };
-pub use shaders::{GrazeMaterial, ScarletShadersPlugin};
+pub use shaders::{
+    GrazeMaterial, HitFlashMaterial, ScarletShadersPlugin, SpellCardBgMaterial, SpellCardBackground,
+};
 pub use states::AppState;
 pub use systems::collision::check_circle_collision;
 pub use systems::item::calc_point_item_value;
