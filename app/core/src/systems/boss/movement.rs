@@ -54,7 +54,11 @@ pub fn boss_movement_system(mut bosses: Query<(&mut Transform, &mut Boss)>, time
     for (mut tf, mut boss) in &mut bosses {
         let idx = boss.current_phase;
 
-        match &mut boss.phases[idx].movement {
+        let Some(phase) = boss.phases.get_mut(idx) else {
+            continue;
+        };
+
+        match &mut phase.movement {
             BossMovement::Static => {
                 // No movement — position stays wherever it was spawned / last placed.
             }
@@ -84,22 +88,24 @@ pub fn boss_movement_system(mut bosses: Query<(&mut Transform, &mut Boss)>, time
                 elapsed_secs,
                 current,
             } => {
-                if waypoints.is_empty() {
-                    // Nothing to do if the waypoint list was left empty.
-                    continue;
-                }
+                if !waypoints.is_empty() {
+                    // Normalize index defensively in case phase data is malformed.
+                    *current %= waypoints.len();
 
-                // Snap to current waypoint position immediately (handles first frame
-                // and ensures the boss is always at a valid waypoint).
-                let pos = waypoints[*current];
-                tf.translation.x = pos.x;
-                tf.translation.y = pos.y;
+                    // Snap to current waypoint position immediately (handles first frame
+                    // and ensures the boss is always at a valid waypoint).
+                    let pos = waypoints[*current];
+                    tf.translation.x = pos.x;
+                    tf.translation.y = pos.y;
 
-                // Advance the wait timer and cycle to the next waypoint when ready.
-                *elapsed_secs += dt;
-                if *elapsed_secs >= *wait_secs {
-                    *current = (*current + 1) % waypoints.len();
-                    *elapsed_secs = 0.0;
+                    // Advance the wait timer; preserve leftover time so cadence stays
+                    // accurate even on long frames.
+                    *elapsed_secs += dt;
+                    if *wait_secs > 0.0 && *elapsed_secs >= *wait_secs {
+                        let steps = (*elapsed_secs / *wait_secs).floor() as usize;
+                        *current = (*current + steps) % waypoints.len();
+                        *elapsed_secs -= *wait_secs * steps as f32;
+                    }
                 }
             }
         }
@@ -196,22 +202,34 @@ mod tests {
         }
     }
 
+    // Helper that mirrors the production teleport logic (steps-based, remainder-preserving).
+    fn teleport_tick(
+        current: &mut usize,
+        elapsed_secs: &mut f32,
+        wait_secs: f32,
+        dt: f32,
+        len: usize,
+    ) {
+        *elapsed_secs += dt;
+        if wait_secs > 0.0 && *elapsed_secs >= wait_secs {
+            let steps = (*elapsed_secs / wait_secs).floor() as usize;
+            *current = (*current + steps) % len;
+            *elapsed_secs -= wait_secs * steps as f32;
+        }
+    }
+
     /// Teleport index must advance after wait_secs elapsed.
     #[test]
     fn teleport_advances_index_after_wait() {
         let wait_secs = 2.0_f32;
         let mut current: usize = 0;
         let mut elapsed_secs: f32 = 0.0;
-        let waypoints = vec![Vec2::ZERO, Vec2::new(100.0, 0.0)];
-        let len = waypoints.len();
+        let len = 2;
 
         // Simulate several small ticks that add up to just over wait_secs.
         for _ in 0..25 {
-            elapsed_secs += 0.09; // 25 × 0.09 = 2.25 s
-            if elapsed_secs >= wait_secs {
-                current = (current + 1) % len;
-                elapsed_secs = 0.0;
-            }
+            teleport_tick(&mut current, &mut elapsed_secs, wait_secs, 0.09, len);
+            // 25 × 0.09 = 2.25 s — should advance once
         }
         assert_eq!(current, 1, "should have advanced to waypoint 1");
     }
@@ -220,20 +238,29 @@ mod tests {
     #[test]
     fn teleport_cycles_back_to_zero() {
         let wait_secs = 1.0_f32;
-        let waypoints = vec![Vec2::ZERO, Vec2::new(50.0, 0.0), Vec2::new(-50.0, 0.0)];
-        let len = waypoints.len();
+        let len = 3;
         let mut current = 0usize;
         let mut elapsed = 0.0_f32;
 
-        // Advance through all three waypoints and back.
+        // Advance through all three waypoints and back (4 advances → index 1).
         for _ in 0..4 {
-            elapsed += wait_secs + 0.01;
-            if elapsed >= wait_secs {
-                current = (current + 1) % len;
-                elapsed = 0.0;
-            }
+            teleport_tick(&mut current, &mut elapsed, wait_secs, wait_secs + 0.01, len);
         }
         assert_eq!(current, 1, "after 4 advances modulo 3, current should be 1");
+    }
+
+    /// A single large dt that covers multiple wait intervals must skip the correct number of waypoints.
+    #[test]
+    fn teleport_large_dt_skips_multiple_waypoints() {
+        let wait_secs = 1.0_f32;
+        let len = 4;
+        let mut current = 0usize;
+        let mut elapsed = 0.0_f32;
+
+        // One tick of 3.5 s — should advance 3 waypoints (indices 0→3) and leave 0.5 s remainder.
+        teleport_tick(&mut current, &mut elapsed, wait_secs, 3.5, len);
+        assert_eq!(current, 3, "3.5 s / 1.0 s = 3 steps");
+        assert!((elapsed - 0.5).abs() < 1e-4, "remainder should be 0.5, got {elapsed}");
     }
 
     /// Play-area clamp: values outside bounds must be clamped.
