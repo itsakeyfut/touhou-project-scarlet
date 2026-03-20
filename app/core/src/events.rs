@@ -82,6 +82,23 @@ pub struct BossSpawnEvent {
     pub stage_number: u8,
 }
 
+/// Fired when the active boss phase changes (HP depleted or time expired).
+///
+/// Emitted by `boss_phase_system` (Issue #58) at the moment the transition
+/// is detected. Consumed by:
+/// - `update_boss_emitter_on_phase_change` (Issue #59) to swap the
+///   [`crate::components::BulletEmitter`] pattern.
+/// - The spell-card background system (Issue #62) to start/stop the
+///   `SpellCardBgMaterial` overlay.
+/// - The UI system to update the spell-card name display.
+#[derive(Event, Message)]
+pub struct BossPhaseChangedEvent {
+    /// The boss entity whose phase changed.
+    pub entity: Entity,
+    /// Index of the **new** active phase inside [`crate::components::Boss::phases`].
+    pub phase: usize,
+}
+
 /// Fired when an enemy bullet newly enters the player's graze zone (16 px).
 ///
 /// Consumed by [`crate::shaders::plugin::update_graze_material`] to trigger

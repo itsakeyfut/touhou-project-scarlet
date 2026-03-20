@@ -13,9 +13,10 @@ pub mod states;
 pub mod systems;
 
 pub use components::{
-    BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, Enemy,
-    EnemyBullet, EnemyBulletKind, EnemyKind, EnemyMovement, GameSessionEntity, GrazeVisual,
-    InvincibilityTimer, ItemKind, ItemPhysics, Player, PlayerBullet, PlayerStats, ShootTimer,
+    Boss, BossMovement, BossPhaseData, BossType, BulletEmitter, BulletPattern, BulletTrail,
+    BulletVelocity, DespawnOutOfBounds, Enemy, EnemyBullet, EnemyBulletKind, EnemyKind,
+    EnemyMovement, GameSessionEntity, GrazeVisual, InvincibilityTimer, ItemKind, ItemPhysics,
+    Player, PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use config::{
     EnemyBulletConfig, EnemyBulletConfigHandle, EnemyBulletConfigParams, FodderEnemyConfig,
@@ -25,8 +26,8 @@ pub use config::{
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::{
-    BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent, ExtendKind, GrazeEvent, PlayerHitEvent,
-    ShootEvent,
+    BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent, ExtendKind,
+    GrazeEvent, PlayerHitEvent, ShootEvent,
 };
 pub use game_set::GameSystemSet;
 pub use resources::{
@@ -61,6 +62,7 @@ impl Plugin for ScarletCorePlugin {
         app.add_message::<EnemyDefeatedEvent>();
         app.add_message::<ExtendEvent>();
         app.add_message::<BossSpawnEvent>();
+        app.add_message::<BossPhaseChangedEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
