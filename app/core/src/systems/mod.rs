@@ -1,3 +1,4 @@
+pub mod boss;
 pub mod bullet;
 pub mod cleanup;
 pub mod collision;
