@@ -87,7 +87,7 @@ impl Plugin for ScarletCorePlugin {
         );
 
         // Per-run reset: restore all session resources to initial values before
-        // the stage loader or player spawner run.
+        // the stage loader runs so the spawner script is fresh when populated.
         app.add_systems(
             OnEnter(AppState::Playing),
             systems::reset::reset_per_run_resources.before(stages::stage1::load_stage1_system),
