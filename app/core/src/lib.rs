@@ -202,6 +202,14 @@ impl Plugin for ScarletCorePlugin {
                 .in_set(GameSystemSet::GameLogic),
         );
 
+        // Spawn the spell-card background when a boss's initial phase is already
+        // a spell card (BossPhaseChangedEvent is not emitted for phase 0).
+        app.add_systems(
+            Update,
+            systems::boss::phase::spawn_initial_spell_card_bg
+                .in_set(GameSystemSet::GameLogic),
+        );
+
         // StageControl systems — stage_control runs first to update elapsed_time,
         // then enemy_spawner uses the fresh time to process the script.
         app.add_systems(

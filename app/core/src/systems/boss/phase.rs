@@ -35,7 +35,7 @@ use crate::{
 /// (which runs in `Collision`) are visible before this system evaluates them.
 pub fn boss_phase_system(
     mut commands: Commands,
-    mut bosses: Query<(Entity, &mut Boss)>,
+    mut bosses: Query<(Entity, &mut Boss, &Transform)>,
     enemy_bullets: Query<Entity, With<EnemyBullet>>,
     time: Res<Time>,
     mut phase_events: MessageWriter<BossPhaseChangedEvent>,
@@ -43,7 +43,7 @@ pub fn boss_phase_system(
     mut stage_data: ResMut<StageData>,
     mut game_data: ResMut<GameData>,
 ) {
-    for (boss_entity, mut boss) in &mut bosses {
+    for (boss_entity, mut boss, boss_tf) in &mut bosses {
         let time_up = boss.phase_timer.tick(time.delta()).just_finished();
         let hp_zero = boss.phases[boss.current_phase].hp <= 0.0;
 
@@ -68,10 +68,10 @@ pub fn boss_phase_system(
             stage_data.boss_defeated = true;
 
             // Notify item/score systems using the regular enemy-defeated path.
-            // Position is not available here so we pass Vec2::ZERO; the item
-            // system uses this only as a spawn origin for drops.
+            // Use the boss's current world position so item drops spawn at the
+            // correct location rather than at screen centre.
             defeated_events.write(EnemyDefeatedEvent {
-                position: Vec2::ZERO,
+                position: boss_tf.translation.truncate(),
                 score: 0, // score was already accumulated per-phase
                 is_boss: true,
             });
@@ -136,11 +136,13 @@ pub fn update_boss_emitter_on_phase_change(
 // on_spell_card_start  (Issue #62 integration)
 // ---------------------------------------------------------------------------
 
-/// Spawns the [`SpellCardBackground`] entity when a spell-card phase begins.
+/// Spawns or replaces the [`SpellCardBackground`] entity when a spell-card phase begins.
 ///
 /// Reads [`BossPhaseChangedEvent`] and — if the new phase `is_spell_card` —
-/// spawns a full-play-area `Mesh2d` carrying a [`SpellCardBgMaterial`]
-/// configured with the boss-specific pattern and colour set.
+/// first despawns every existing [`SpellCardBackground`] entity (preventing
+/// fullscreen-mesh stacking across multiple spell-card phases), then spawns a
+/// fresh full-play-area `Mesh2d` carrying a [`SpellCardBgMaterial`] configured
+/// with the boss-specific pattern and colour set.
 ///
 /// The `intensity` field starts at `0.0` and is faded in by
 /// [`crate::shaders::plugin::update_spell_card_bg_time`] at `2.0/s`
@@ -153,10 +155,17 @@ pub fn update_boss_emitter_on_phase_change(
 ///
 /// Registered in [`crate::GameSystemSet::GameLogic`], chained after
 /// [`boss_phase_system`] so that events are visible.
+///
+/// # Initial spell-card phase
+///
+/// When a boss spawns with its first phase already a spell card the
+/// `BossPhaseChangedEvent` is never emitted (it fires only on *transitions*).
+/// The separate [`spawn_initial_spell_card_bg`] system handles that case.
 pub fn on_spell_card_start(
     mut commands: Commands,
     mut phase_events: MessageReader<BossPhaseChangedEvent>,
     bosses: Query<&Boss>,
+    existing_bgs: Query<Entity, With<SpellCardBackground>>,
     mut spell_materials: ResMut<Assets<SpellCardBgMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
@@ -166,27 +175,87 @@ pub fn on_spell_card_start(
         };
         let phase = &boss.phases[event.phase];
         if !phase.is_spell_card {
+            // Non-spell phase — despawn any lingering spell-card background.
+            for bg_entity in &existing_bgs {
+                commands.entity(bg_entity).despawn();
+            }
             continue;
         }
 
-        let (pattern_id, primary_color, secondary_color) = boss.boss_type.spell_card_colors();
+        // Replace any previous spell-card background before spawning the new one.
+        for bg_entity in &existing_bgs {
+            commands.entity(bg_entity).despawn();
+        }
 
-        commands.spawn((
-            SpellCardBackground,
-            GameSessionEntity,
-            Mesh2d(meshes.add(Rectangle::new(384.0, 448.0))),
-            MeshMaterial2d(spell_materials.add(SpellCardBgMaterial {
-                time: 0.0,
-                pattern_id,
-                intensity: 0.0,
-                _pad: 0.0,
-                primary_color,
-                secondary_color,
-            })),
-            // Render behind gameplay entities (player is at z=1, background at -0.5).
-            Transform::from_xyz(0.0, 0.0, -0.5),
-        ));
+        let (pattern_id, primary_color, secondary_color) = boss.boss_type.spell_card_colors();
+        spawn_spell_card_bg(
+            &mut commands,
+            &mut meshes,
+            &mut spell_materials,
+            pattern_id,
+            primary_color,
+            secondary_color,
+        );
     }
+}
+
+/// Spawns the [`SpellCardBackground`] when a boss's first phase is already a spell card.
+///
+/// Because [`on_spell_card_start`] only reacts to [`BossPhaseChangedEvent`]
+/// (which is never emitted for the initial phase), this companion system uses
+/// [`Added<Boss>`] to detect a freshly spawned boss and spawns the background
+/// immediately if `spell_card_active` is `true`.
+///
+/// # Ordering
+///
+/// Registered in [`crate::GameSystemSet::GameLogic`], runs alongside
+/// (or just before) the main phase-change chain.
+pub fn spawn_initial_spell_card_bg(
+    mut commands: Commands,
+    new_bosses: Query<&Boss, Added<Boss>>,
+    mut spell_materials: ResMut<Assets<SpellCardBgMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for boss in &new_bosses {
+        if !boss.spell_card_active {
+            continue;
+        }
+        let (pattern_id, primary_color, secondary_color) = boss.boss_type.spell_card_colors();
+        spawn_spell_card_bg(
+            &mut commands,
+            &mut meshes,
+            &mut spell_materials,
+            pattern_id,
+            primary_color,
+            secondary_color,
+        );
+    }
+}
+
+/// Shared helper: spawns a single full-play-area [`SpellCardBackground`] mesh.
+fn spawn_spell_card_bg(
+    commands: &mut Commands,
+    meshes: &mut ResMut<Assets<Mesh>>,
+    spell_materials: &mut ResMut<Assets<SpellCardBgMaterial>>,
+    pattern_id: u32,
+    primary_color: LinearRgba,
+    secondary_color: LinearRgba,
+) {
+    commands.spawn((
+        SpellCardBackground,
+        GameSessionEntity,
+        Mesh2d(meshes.add(Rectangle::new(384.0, 448.0))),
+        MeshMaterial2d(spell_materials.add(SpellCardBgMaterial {
+            time: 0.0,
+            pattern_id,
+            intensity: 0.0,
+            _pad: 0.0,
+            primary_color,
+            secondary_color,
+        })),
+        // Render behind gameplay entities (player is at z=1, background at -0.5).
+        Transform::from_xyz(0.0, 0.0, -0.5),
+    ));
 }
 
 // ---------------------------------------------------------------------------
