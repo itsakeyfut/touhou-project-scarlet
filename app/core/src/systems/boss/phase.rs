@@ -22,21 +22,31 @@ use crate::{
 /// 2. Checks whether the current phase ended (HP ≤ 0 **or** timer elapsed).
 /// 3. If the phase is a defeated spell card (HP ≤ 0, not timed out) awards the
 ///    `spell_card_bonus` to `GameData::score`.
-/// 4. Despawns all live enemy bullets so the field is clear for the new phase.
-/// 5. Either advances to the next phase **or** despawns the boss entity and
+/// 4. Deactivates the current [`BulletEmitter`] immediately to prevent the old
+///    emitter from firing in the next [`crate::game_set::GameSystemSet::BulletEmit`]
+///    tick before [`update_boss_emitter_on_phase_change`] installs the new one.
+/// 5. Despawns all live enemy bullets so the field is clear for the new phase.
+/// 6. Either advances to the next phase **or** despawns the boss entity and
 ///    sets `StageData::boss_defeated = true`.
-/// 6. Emits [`BossPhaseChangedEvent`] so downstream systems (emitter swap,
+/// 7. Emits [`BossPhaseChangedEvent`] so downstream systems (emitter swap,
 ///    spell-card background, UI) can react in the same frame.
 ///
-/// # Ordering
+/// # Ordering & emitter timing
 ///
-/// Registered in [`crate::GameSystemSet::GameLogic`] so that HP changes
-/// written by [`crate::systems::collision::player_bullet_hit_boss`]
-/// (which runs in `Collision`) are visible before this system evaluates them.
+/// This system runs in [`crate::game_set::GameSystemSet::GameLogic`] — after
+/// both `BulletEmit` and `Collision` — so HP changes from
+/// [`crate::systems::collision::player_bullet_hit_boss`] are visible when the
+/// phase condition is evaluated.  Because `BulletEmit` already ran in the same
+/// frame, the old emitter fires once on the transition frame. To prevent this
+/// from happening on subsequent frames the emitter is set `active = false` here
+/// so `bullet_emitter_system` skips it until the `Commands`-deferred insert
+/// from [`update_boss_emitter_on_phase_change`] replaces it at end-of-frame.
 pub fn boss_phase_system(
     mut commands: Commands,
     mut bosses: Query<(Entity, &mut Boss, &Transform)>,
+    mut emitters: Query<&mut BulletEmitter>,
     enemy_bullets: Query<Entity, With<EnemyBullet>>,
+    spell_card_bgs: Query<Entity, With<SpellCardBackground>>,
     time: Res<Time>,
     mut phase_events: MessageWriter<BossPhaseChangedEvent>,
     mut defeated_events: MessageWriter<EnemyDefeatedEvent>,
@@ -57,6 +67,12 @@ pub fn boss_phase_system(
             game_data.score += current_phase.spell_card_bonus as u64;
         }
 
+        // Silence the current emitter immediately so it does not fire in the
+        // next BulletEmit tick while the Commands-deferred insert is pending.
+        if let Ok(mut emitter) = emitters.get_mut(boss_entity) {
+            emitter.active = false;
+        }
+
         // Clear all active enemy bullets so the next phase starts on a clean field.
         for bullet_entity in &enemy_bullets {
             commands.entity(bullet_entity).despawn();
@@ -65,6 +81,13 @@ pub fn boss_phase_system(
         let next_phase_idx = boss.current_phase + 1;
         if next_phase_idx >= boss.phases.len() {
             // All phases exhausted — boss is defeated.
+            // Despawn any spell-card background that was active during the last
+            // phase; BossPhaseChangedEvent is not emitted here so on_spell_card_start
+            // will not run its cleanup path automatically.
+            for bg_entity in &spell_card_bgs {
+                commands.entity(bg_entity).despawn();
+            }
+
             stage_data.boss_defeated = true;
 
             // Notify item/score systems using the regular enemy-defeated path.
