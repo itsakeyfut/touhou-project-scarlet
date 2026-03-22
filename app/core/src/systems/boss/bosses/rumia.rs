@@ -211,7 +211,8 @@ pub fn on_boss_spawn_stage1(
     mut stage_data: ResMut<StageData>,
 ) {
     for event in boss_events.read() {
-        if event.stage_number != 1 {
+        // Skip other stages and guard against duplicate messages in the same frame.
+        if event.stage_number != 1 || stage_data.boss_active {
             continue;
         }
         spawn_rumia(&mut commands);
