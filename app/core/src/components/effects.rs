@@ -37,15 +37,16 @@ pub struct FadeOut {
 impl FadeOut {
     /// Creates a new [`FadeOut`] that completes in `duration_secs` seconds.
     ///
-    /// # Panics (debug only)
+    /// # Panics
     ///
-    /// Asserts that `duration_secs > 0.0` in debug builds. Passing zero or a
-    /// negative value creates a timer that is already finished, causing the
-    /// entity to be despawned on the first tick without any visible fade.
+    /// Panics if `duration_secs` is not finite or is not greater than `0.0`.
+    /// Passing zero, a negative value, or a non-finite value (NaN / infinity)
+    /// would create a timer that is immediately finished, causing the entity to
+    /// be despawned on the first tick without any visible fade.
     pub fn new(duration_secs: f32) -> Self {
-        debug_assert!(
-            duration_secs > 0.0,
-            "FadeOut duration must be positive for a visible fade effect (got {duration_secs})"
+        assert!(
+            duration_secs.is_finite() && duration_secs > 0.0,
+            "FadeOut duration must be finite and > 0.0 (got {duration_secs})"
         );
         Self {
             timer: Timer::from_seconds(duration_secs, TimerMode::Once),
