@@ -46,9 +46,18 @@ pub const COUNTER_BOMB_WINDOW_SECS: f32 = 0.1;
 ///
 /// # Counter-bomb
 ///
-/// When the player is hit, `player_hit_detection` sets
+/// When the player is hit, `handle_player_hit` sets
 /// `counter_bomb_window = COUNTER_BOMB_WINDOW_SECS`. `bomb_input_system`
 /// decrements that window each frame and checks it when X is pressed.
+///
+/// # Lethal-hit deferral (`pending_death`)
+///
+/// When a hit is lethal (`lives` would reach 0), `handle_player_hit` sets
+/// `pending_death = true` instead of immediately calling
+/// `NextState::set(GameOver)`. This keeps the game in `Playing` so that
+/// `bomb_input_system` can still activate a counter-bomb within the open
+/// window. Once `counter_bomb_window` drains to zero, `bomb_input_system`
+/// commits the GameOver transition.
 ///
 /// # Invincibility check
 ///
@@ -63,6 +72,7 @@ pub const COUNTER_BOMB_WINDOW_SECS: f32 = 0.1;
 /// | `active_timer`         | Counts down `BOMB_DURATION_SECS`; finishes when the visual effect ends. |
 /// | `invincible_timer`     | Counts down `BOMB_INVINCIBLE_SECS`; player is immune while `> 0`. |
 /// | `counter_bomb_window`  | Remaining counter-bomb window in seconds (`0.0` when elapsed). |
+/// | `pending_death`        | `true` after a lethal hit while the counter-bomb window is still open; GameOver is deferred until the window closes or a counter-bomb fires. |
 #[derive(Resource)]
 pub struct BombState {
     /// `true` while the bomb visual effect is active and bullets are being cleared.
@@ -86,6 +96,18 @@ pub struct BombState {
     /// frame.  If the player presses X while this is `> 0.0`, the activation
     /// is treated as a counter-bomb.
     pub counter_bomb_window: f32,
+    /// `true` when a lethal hit has been registered but GameOver is deferred.
+    ///
+    /// Set by [`crate::systems::collision::handle_player_hit`] when
+    /// `lives` reaches zero instead of immediately transitioning to
+    /// [`crate::states::AppState::GameOver`]. This keeps the game in
+    /// `Playing` state so `bomb_input_system` can still fire a counter-bomb
+    /// within the open `counter_bomb_window`.
+    ///
+    /// Cleared by `bomb_input_system` either when:
+    /// - A counter-bomb fires (hit cancelled, game continues), or
+    /// - `counter_bomb_window` reaches `0.0` (GameOver confirmed).
+    pub pending_death: bool,
 }
 
 impl Default for BombState {
@@ -108,6 +130,7 @@ impl Default for BombState {
             active_timer,
             invincible_timer,
             counter_bomb_window: 0.0,
+            pending_death: false,
         }
     }
 }
@@ -144,6 +167,7 @@ mod tests {
         let state = BombState::default();
         assert!(!state.active, "default BombState must not be active");
         assert_eq!(state.counter_bomb_window, 0.0);
+        assert!(!state.pending_death, "default BombState must not be pending_death");
         assert!(
             !state.is_invincible(),
             "default BombState must not be invincible"
@@ -155,8 +179,14 @@ mod tests {
     fn not_invincible_when_inactive() {
         let mut state = BombState::default();
         // Manually finish both timers to simulate a fully elapsed state.
-        state.active_timer.tick(std::time::Duration::from_secs_f32(BOMB_INVINCIBLE_SECS + 1.0));
-        state.invincible_timer.tick(std::time::Duration::from_secs_f32(BOMB_INVINCIBLE_SECS + 1.0));
+        state.active_timer.tick(std::time::Duration::from_secs_f32(
+            BOMB_INVINCIBLE_SECS + 1.0,
+        ));
+        state
+            .invincible_timer
+            .tick(std::time::Duration::from_secs_f32(
+                BOMB_INVINCIBLE_SECS + 1.0,
+            ));
         assert!(!state.is_invincible());
     }
 
@@ -175,8 +205,13 @@ mod tests {
         // invincible_timer was just set — remaining_secs() > 0
         state.invincible_timer = Timer::from_seconds(BOMB_INVINCIBLE_SECS, TimerMode::Once);
         // Tick only a small amount so it has not yet finished.
-        state.invincible_timer.tick(std::time::Duration::from_secs_f32(0.1));
-        assert!(state.is_invincible(), "should be invincible while timer has time left");
+        state
+            .invincible_timer
+            .tick(std::time::Duration::from_secs_f32(0.1));
+        assert!(
+            state.is_invincible(),
+            "should be invincible while timer has time left"
+        );
     }
 
     /// is_invincible must return false once both conditions clear.
@@ -184,7 +219,11 @@ mod tests {
     fn not_invincible_after_full_expiry() {
         let mut state = BombState::default();
         state.active = false;
-        state.invincible_timer.tick(std::time::Duration::from_secs_f32(BOMB_INVINCIBLE_SECS + 1.0));
+        state
+            .invincible_timer
+            .tick(std::time::Duration::from_secs_f32(
+                BOMB_INVINCIBLE_SECS + 1.0,
+            ));
         assert!(!state.is_invincible());
     }
 
@@ -201,6 +240,9 @@ mod tests {
     #[test]
     fn counter_bomb_window_is_short_positive() {
         assert!(COUNTER_BOMB_WINDOW_SECS > 0.0);
-        assert!(COUNTER_BOMB_WINDOW_SECS < 0.5, "counter-bomb window should be < 0.5 s");
+        assert!(
+            COUNTER_BOMB_WINDOW_SECS < 0.5,
+            "counter-bomb window should be < 0.5 s"
+        );
     }
 }

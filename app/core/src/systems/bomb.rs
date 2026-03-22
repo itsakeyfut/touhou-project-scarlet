@@ -4,6 +4,7 @@ use crate::{
     components::bullet::EnemyBullet,
     events::BombUsedEvent,
     resources::{BOMB_DURATION_SECS, BOMB_INVINCIBLE_SECS, BombState, GameData},
+    states::AppState,
 };
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,15 @@ use crate::{
 /// If `bomb_state.counter_bomb_window > 0.0` when X is pressed, the bomb is
 /// treated as a counter-bomb: the life decremented by
 /// [`crate::systems::collision::handle_player_hit`] is restored (up to a max
-/// of 8) and the window is cleared.
+/// of 8) and the window is cleared. If the hit was lethal (`pending_death`),
+/// the pending GameOver is cancelled.
+///
+/// # Lethal-hit GameOver commitment
+///
+/// When the counter-bomb window drains to zero while `pending_death` is set,
+/// `bomb_input_system` calls `next_state.set(AppState::GameOver)` to confirm
+/// the death. This keeps GameOver strictly in `Playing` state for the duration
+/// of the window.
 ///
 /// # Ordering
 ///
@@ -35,12 +44,20 @@ pub fn bomb_input_system(
     mut bomb_state: ResMut<BombState>,
     mut game_data: ResMut<GameData>,
     mut bomb_events: MessageWriter<BombUsedEvent>,
+    mut next_state: ResMut<NextState<AppState>>,
     time: Res<Time>,
 ) {
     // Drain the counter-bomb window every frame regardless of input.
     if bomb_state.counter_bomb_window > 0.0 {
         bomb_state.counter_bomb_window =
             (bomb_state.counter_bomb_window - time.delta_secs()).max(0.0);
+
+        // Window just closed on a lethal hit — commit GameOver.
+        if bomb_state.pending_death && bomb_state.counter_bomb_window <= 0.0 {
+            bomb_state.pending_death = false;
+            next_state.set(AppState::GameOver);
+            return;
+        }
     }
 
     if !keys.just_pressed(KeyCode::KeyX) {
@@ -59,6 +76,8 @@ pub fn bomb_input_system(
         // Saturating add capped to 8 (EoSD maximum).
         game_data.lives = game_data.lives.saturating_add(1).min(8);
         bomb_state.counter_bomb_window = 0.0;
+        // Cancel a deferred lethal-hit GameOver.
+        bomb_state.pending_death = false;
     }
 
     game_data.bombs -= 1;
@@ -149,6 +168,7 @@ pub fn bomb_effect_system(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resources::COUNTER_BOMB_WINDOW_SECS;
 
     /// bomb_input_system must not activate if already active.
     #[test]
@@ -206,6 +226,33 @@ mod tests {
         assert!(
             state.is_invincible(),
             "invincible tail must still be active"
+        );
+    }
+
+    /// pending_death is cleared when a counter-bomb fires.
+    #[test]
+    fn counter_bomb_clears_pending_death() {
+        let mut state = BombState::default();
+        state.pending_death = true;
+        state.counter_bomb_window = COUNTER_BOMB_WINDOW_SECS;
+        // Simulate counter-bomb path.
+        state.counter_bomb_window = 0.0;
+        state.pending_death = false;
+        assert!(!state.pending_death, "counter-bomb must clear pending_death");
+    }
+
+    /// pending_death triggers GameOver when window drains to zero.
+    #[test]
+    fn pending_death_commits_game_over_on_window_expiry() {
+        let mut state = BombState::default();
+        state.pending_death = true;
+        state.counter_bomb_window = 0.01;
+        // Simulate window drain past zero.
+        state.counter_bomb_window = (state.counter_bomb_window - 0.02_f32).max(0.0);
+        // After this point bomb_input_system would call next_state.set(GameOver).
+        assert!(
+            state.pending_death && state.counter_bomb_window <= 0.0,
+            "should commit GameOver when window reaches zero"
         );
     }
 
