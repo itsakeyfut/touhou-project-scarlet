@@ -89,16 +89,24 @@ pub struct BombState {
 }
 
 impl Default for BombState {
-    /// Returns an inactive `BombState` with zero-duration timers.
+    /// Returns an inactive `BombState` with fully-elapsed timers.
+    ///
+    /// Both `active_timer` and `invincible_timer` are ticked past their full
+    /// duration so that `remaining_secs() == 0.0` and `is_invincible()` returns
+    /// `false` immediately. The duration is preserved so the timers can be
+    /// reset to their correct values when a bomb is actually activated.
     ///
     /// Inserted at game start by [`crate::ScarletCorePlugin`].
     fn default() -> Self {
+        let mut active_timer = Timer::from_seconds(BOMB_DURATION_SECS, TimerMode::Once);
+        let mut invincible_timer = Timer::from_seconds(BOMB_INVINCIBLE_SECS, TimerMode::Once);
+        // Tick past the full duration so remaining_secs() == 0.0 from the start.
+        active_timer.tick(std::time::Duration::from_secs_f32(BOMB_DURATION_SECS));
+        invincible_timer.tick(std::time::Duration::from_secs_f32(BOMB_INVINCIBLE_SECS));
         Self {
             active: false,
-            // Zero-duration timers start in the "finished" state, which is
-            // correct for an inactive bomb — no ticking needed.
-            active_timer: Timer::from_seconds(BOMB_DURATION_SECS, TimerMode::Once),
-            invincible_timer: Timer::from_seconds(BOMB_INVINCIBLE_SECS, TimerMode::Once),
+            active_timer,
+            invincible_timer,
             counter_bomb_window: 0.0,
         }
     }
@@ -136,6 +144,10 @@ mod tests {
         let state = BombState::default();
         assert!(!state.active, "default BombState must not be active");
         assert_eq!(state.counter_bomb_window, 0.0);
+        assert!(
+            !state.is_invincible(),
+            "default BombState must not be invincible"
+        );
     }
 
     /// is_invincible must return false when inactive and timers have elapsed.
