@@ -12,8 +12,7 @@ use crate::{
     config::{EnemyBulletConfigParams, PlayerBulletConfigParams, PlayerConfigParams},
     constants::PLAY_AREA_HALF_H,
     events::{BossHitEvent, EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
-    resources::GameData,
-    states::AppState,
+    resources::{BombState, COUNTER_BOMB_WINDOW_SECS, GameData},
 };
 
 // ---------------------------------------------------------------------------
@@ -194,13 +193,15 @@ pub fn player_hit_detection(
     bullets: Query<(&Transform, &EnemyBulletKind), With<EnemyBullet>>,
     mut hit_events: MessageWriter<PlayerHitEvent>,
     enemy_bullet_cfg: EnemyBulletConfigParams,
+    bomb_state: Res<BombState>,
 ) {
     let Ok((player_tf, stats, invincibility)) = player.single() else {
         return;
     };
 
-    // Skip detection while the player is invincible.
-    if invincibility.is_some() {
+    // Skip detection while the player is post-hit invincible, bomb-invincible,
+    // or in the pending-death window (lethal hit already registered this run).
+    if invincibility.is_some() || bomb_state.is_invincible() || bomb_state.pending_death {
         return;
     }
 
@@ -224,10 +225,18 @@ pub fn player_hit_detection(
 /// Responds to [`PlayerHitEvent`] by decrementing lives, applying power loss,
 /// resetting the player's position, and starting the invincibility window.
 ///
-/// # Game over
+/// # Lethal-hit deferral
 ///
-/// When [`GameData::lives`] reaches 0 the state machine transitions to
-/// [`AppState::GameOver`] and no further hit processing occurs.
+/// When [`GameData::lives`] reaches 0 the system does **not** immediately
+/// transition to [`AppState::GameOver`]. Instead it sets
+/// [`BombState::pending_death`] so that `bomb_input_system` has one
+/// `counter_bomb_window` to cancel the lethal hit with a counter-bomb.
+/// `bomb_input_system` commits the `GameOver` transition once the window
+/// closes without a bomb press.
+///
+/// Position reset and invincibility are skipped on lethal hits; they are
+/// unnecessary because either the counter-bomb saves the player (bomb
+/// invincibility applies instead) or the game ends.
 ///
 /// Registered in [`crate::GameSystemSet::GameLogic`].
 pub fn handle_player_hit(
@@ -235,8 +244,8 @@ pub fn handle_player_hit(
     mut hit_events: MessageReader<PlayerHitEvent>,
     mut game_data: ResMut<GameData>,
     mut player: Query<(Entity, &mut Transform), With<Player>>,
-    mut next_state: ResMut<NextState<AppState>>,
     player_cfg: PlayerConfigParams,
+    mut bomb_state: ResMut<BombState>,
 ) {
     // Only react to the first event per frame.
     let Some(_event) = hit_events.read().next() else {
@@ -247,6 +256,9 @@ pub fn handle_player_hit(
         return;
     };
 
+    // Open the counter-bomb window so bomb_input_system can cancel this hit.
+    bomb_state.counter_bomb_window = COUNTER_BOMB_WINDOW_SECS;
+
     // Decrement lives (saturating prevents wrapping on u8).
     game_data.lives = game_data.lives.saturating_sub(1);
 
@@ -254,14 +266,16 @@ pub fn handle_player_hit(
     game_data.power = game_data.power.saturating_sub(16);
 
     if game_data.lives == 0 {
-        next_state.set(AppState::GameOver);
+        // Defer GameOver so bomb_input_system can still fire a counter-bomb.
+        // bomb_input_system will call next_state.set(GameOver) once the
+        // counter_bomb_window drains to zero without a bomb press.
+        bomb_state.pending_death = true;
         return;
     }
 
-    // Reset the player to the standard spawn position.
+    // Non-lethal hit: reset position and start invincibility.
     transform.translation = Vec3::new(0.0, -PLAY_AREA_HALF_H + 60.0, 1.0);
 
-    // Start the invincibility window (duration from player.ron).
     commands.entity(player_entity).insert(InvincibilityTimer {
         timer: Timer::from_seconds(player_cfg.invincibility_secs(), TimerMode::Once),
     });

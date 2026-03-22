@@ -26,8 +26,8 @@ pub use config::{
 };
 pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
 pub use events::{
-    BossHitEvent, BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent, ExtendEvent,
-    ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
+    BombUsedEvent, BossHitEvent, BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent,
+    ExtendEvent, ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
 };
 pub use game_set::GameSystemSet;
 pub use resources::{
@@ -36,7 +36,7 @@ pub use resources::{
     SpawnEntry, StageData,
 };
 pub use shaders::{
-    GrazeMaterial, HitFlashMaterial, ScarletShadersPlugin, SpellCardBgMaterial, SpellCardBackground,
+    GrazeMaterial, HitFlashMaterial, ScarletShadersPlugin, SpellCardBackground, SpellCardBgMaterial,
 };
 pub use states::AppState;
 pub use systems::collision::check_circle_collision;
@@ -67,6 +67,7 @@ impl Plugin for ScarletCorePlugin {
         app.add_message::<BossSpawnEvent>();
         app.add_message::<BossPhaseChangedEvent>();
         app.add_message::<BossHitEvent>();
+        app.add_message::<BombUsedEvent>();
 
         // Resources — inserted with game-start values.
         app.insert_resource(GameData::new_game());
@@ -115,6 +116,25 @@ impl Plugin for ScarletCorePlugin {
                 )
                     .in_set(GameSystemSet::Input),
             );
+
+        // Bomb systems.
+        // bomb_input_system runs in Input so counter-bomb window set by
+        // handle_player_hit (GameLogic, previous frame) is available.
+        // bomb_effect_system runs in GameLogic after Collision so graze is
+        // finalised before bullets are cleared.
+        // bomb_active_system runs in Effects to tick timers last.
+        app.add_systems(
+            Update,
+            systems::bomb::bomb_input_system.in_set(GameSystemSet::Input),
+        )
+        .add_systems(
+            Update,
+            systems::bomb::bomb_effect_system.in_set(GameSystemSet::GameLogic),
+        )
+        .add_systems(
+            Update,
+            systems::bomb::bomb_active_system.in_set(GameSystemSet::Effects),
+        );
 
         // Bullet systems.
         app.add_systems(
@@ -208,8 +228,7 @@ impl Plugin for ScarletCorePlugin {
         // a spell card (BossPhaseChangedEvent is not emitted for phase 0).
         app.add_systems(
             Update,
-            systems::boss::phase::spawn_initial_spell_card_bg
-                .in_set(GameSystemSet::GameLogic),
+            systems::boss::phase::spawn_initial_spell_card_bg.in_set(GameSystemSet::GameLogic),
         );
 
         // StageControl systems — stage_control runs first to update elapsed_time,
