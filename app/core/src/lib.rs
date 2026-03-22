@@ -36,7 +36,8 @@ pub use resources::{
     SpawnEntry, StageData,
 };
 pub use shaders::{
-    GrazeMaterial, HitFlashMaterial, ScarletShadersPlugin, SpellCardBackground, SpellCardBgMaterial,
+    BombMarisaMaterial, BombMarisaVisual, BombReimuMaterial, BombReimuVisual, GrazeMaterial,
+    HitFlashMaterial, ScarletShadersPlugin, SpellCardBackground, SpellCardBgMaterial,
 };
 pub use states::AppState;
 pub use systems::collision::check_circle_collision;
