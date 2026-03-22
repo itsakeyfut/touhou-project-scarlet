@@ -31,7 +31,8 @@ pub use events::{
 };
 pub use game_set::GameSystemSet;
 pub use resources::{
-    BOMB_EXTEND_FRAGMENTS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
+    BOMB_DURATION_SECS, BOMB_EXTEND_FRAGMENTS, BOMB_INVINCIBLE_SECS, BombState,
+    COUNTER_BOMB_WINDOW_SECS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
     SpawnEntry, StageData,
 };
 pub use shaders::{
@@ -72,6 +73,7 @@ impl Plugin for ScarletCorePlugin {
         app.insert_resource(FragmentTracker::default());
         app.insert_resource(StageData::default());
         app.insert_resource(EnemySpawner::default());
+        app.insert_resource(BombState::default());
 
         // System set ordering — all sets run only while Playing.
         app.configure_sets(
