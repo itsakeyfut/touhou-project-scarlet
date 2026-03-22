@@ -17,6 +17,120 @@ use crate::{
 const DESPAWN_MARGIN: f32 = 32.0;
 
 // ---------------------------------------------------------------------------
+// Power stage table
+// ---------------------------------------------------------------------------
+
+/// Parameters for one power stage of the Reimu A shot pattern.
+///
+/// | Field    | Description |
+/// |----------|-------------|
+/// | `count`  | Number of bullets per shot |
+/// | `spread` | Total horizontal spread across the fan (px) |
+/// | `damage` | Damage per bullet on contact |
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PowerStageParams {
+    /// Number of bullets fired per shot.
+    pub count: u8,
+    /// Total horizontal span of the bullet fan in pixels.
+    ///
+    /// When `count == 1` this is ignored and the single bullet fires straight up.
+    pub spread: f32,
+    /// Damage dealt to an enemy per bullet contact.
+    pub damage: f32,
+}
+
+/// Returns the [`PowerStageParams`] for the Reimu A shot at the given power level.
+///
+/// Eight stages are defined, each spanning 16 power units:
+///
+/// | Stage | Power   | Bullets | Spread (px) | Damage |
+/// |-------|---------|---------|-------------|--------|
+/// | 0     | 0–15    | 1       | 0           | 10.0   |
+/// | 1     | 16–31   | 2       | 8           | 11.0   |
+/// | 2     | 32–47   | 3       | 10          | 12.0   |
+/// | 3     | 48–63   | 3       | 10          | 13.0   |
+/// | 4     | 64–79   | 4       | 12          | 14.0   |
+/// | 5     | 80–95   | 4       | 12          | 15.0   |
+/// | 6     | 96–111  | 5       | 14          | 16.0   |
+/// | 7     | 112–127 | 5       | 14          | 17.0   |
+/// | 8     | 128     | 5       | 14          | 18.0   |
+pub fn power_stage_params(power: u8) -> PowerStageParams {
+    match power {
+        0..=15 => PowerStageParams {
+            count: 1,
+            spread: 0.0,
+            damage: 10.0,
+        },
+        16..=31 => PowerStageParams {
+            count: 2,
+            spread: 8.0,
+            damage: 11.0,
+        },
+        32..=47 => PowerStageParams {
+            count: 3,
+            spread: 10.0,
+            damage: 12.0,
+        },
+        48..=63 => PowerStageParams {
+            count: 3,
+            spread: 10.0,
+            damage: 13.0,
+        },
+        64..=79 => PowerStageParams {
+            count: 4,
+            spread: 12.0,
+            damage: 14.0,
+        },
+        80..=95 => PowerStageParams {
+            count: 4,
+            spread: 12.0,
+            damage: 15.0,
+        },
+        96..=111 => PowerStageParams {
+            count: 5,
+            spread: 14.0,
+            damage: 16.0,
+        },
+        112..=127 => PowerStageParams {
+            count: 5,
+            spread: 14.0,
+            damage: 17.0,
+        },
+        _ => PowerStageParams {
+            // Power 128 (MAX).
+            count: 5,
+            spread: 14.0,
+            damage: 18.0,
+        },
+    }
+}
+
+/// Returns the fire interval in seconds for the given power level.
+///
+/// Higher power stages shoot faster:
+///
+/// | Power    | Interval (s) | Shots/s (approx) |
+/// |----------|--------------|------------------|
+/// | 0–15     | 0.200        | 5                |
+/// | 16–31    | 0.160        | 6.25             |
+/// | 32–47    | 0.140        | ~7.1             |
+/// | 48–63    | 0.120        | ~8.3             |
+/// | 64–95    | 0.100        | 10               |
+/// | 96–127   | 0.083        | ~12              |
+/// | 128      | 0.070        | ~14.3            |
+pub fn shoot_interval_from_power(power: u8) -> f32 {
+    match power {
+        0..=15 => 0.200,
+        16..=31 => 0.160,
+        32..=47 => 0.140,
+        48..=63 => 0.120,
+        64..=95 => 0.100,
+        96..=127 => 0.083,
+        _ => 0.070, // Power 128 (MAX).
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public systems
 // ---------------------------------------------------------------------------
 
@@ -57,15 +171,21 @@ pub fn despawn_out_of_bounds_system(
 
 /// Spawns player bullets in response to [`ShootEvent`].
 ///
-/// The number of bullets and their horizontal spread are determined by the
-/// current power level in [`GameData`]:
+/// Bullet count, spread, and damage are determined by the current power level
+/// via the 8-stage table in [`power_stage_params`]. Forward speed and sprite
+/// dimensions are read from [`PlayerBulletConfigParams`].
 ///
-/// | Power   | Bullets |
-/// |---------|---------|
-/// | 0–31    | 1       |
-/// | 32–63   | 3       |
-/// | 64–95   | 4       |
-/// | 96–128  | 5       |
+/// | Power   | Bullets | Spread (px) | Damage |
+/// |---------|---------|-------------|--------|
+/// | 0–15    | 1       | 0           | 10     |
+/// | 16–31   | 2       | 8           | 11     |
+/// | 32–47   | 3       | 10          | 12     |
+/// | 48–63   | 3       | 10          | 13     |
+/// | 64–79   | 4       | 12          | 14     |
+/// | 80–95   | 4       | 12          | 15     |
+/// | 96–111  | 5       | 14          | 16     |
+/// | 112–127 | 5       | 14          | 17     |
+/// | 128     | 5       | 14          | 18     |
 ///
 /// Registered in [`crate::GameSystemSet::BulletEmit`].
 pub fn bullet_spawn_system(
@@ -75,8 +195,8 @@ pub fn bullet_spawn_system(
     bullet_cfg: PlayerBulletConfigParams,
 ) {
     for event in events.read() {
-        let count = bullet_count_from_power(game_data.power);
-        spawn_bullet_stream(&mut commands, event.origin, count, &bullet_cfg);
+        let stage = power_stage_params(game_data.power);
+        spawn_bullet_stream(&mut commands, event.origin, stage, &bullet_cfg);
     }
 }
 
@@ -84,42 +204,37 @@ pub fn bullet_spawn_system(
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/// Returns the number of bullet streams for the given power level.
-fn bullet_count_from_power(power: u8) -> u8 {
-    match power {
-        0..=31 => 1,
-        32..=63 => 3,
-        64..=95 => 4,
-        _ => 5,
-    }
-}
-
-/// Spawns `count` bullets in a horizontal fan centred on `origin`.
+/// Spawns bullets in a horizontal fan centred on `origin` using the given
+/// power-stage parameters.
+///
+/// Speed, horizontal-velocity scale, spawn y-offset, and sprite dimensions
+/// come from [`PlayerBulletConfigParams`] to remain configurable without a
+/// code change.
 fn spawn_bullet_stream(
     commands: &mut Commands,
     origin: Vec2,
-    count: u8,
+    stage: PowerStageParams,
     cfg: &PlayerBulletConfigParams,
 ) {
-    let spread = cfg.spread();
     let speed = cfg.speed();
     let spread_speed_scale = cfg.spread_speed_scale();
     let origin_y_offset = cfg.origin_y_offset();
     let sprite_w = cfg.sprite_width();
     let sprite_h = cfg.sprite_height();
-    let damage = cfg.damage();
 
-    let count = count.max(1);
+    let count = stage.count.max(1);
     for i in 0..count {
         let x_offset = if count > 1 {
             let t = i as f32 / (count - 1) as f32; // 0.0 … 1.0
-            -spread / 2.0 + spread * t
+            -stage.spread / 2.0 + stage.spread * t
         } else {
             0.0
         };
 
         commands.spawn((
-            PlayerBullet { damage },
+            PlayerBullet {
+                damage: stage.damage,
+            },
             BulletVelocity(Vec2::new(x_offset * spread_speed_scale, speed)),
             Sprite {
                 color: Color::srgb(1.0, 0.8, 0.0),
@@ -143,26 +258,119 @@ fn spawn_bullet_stream(
 mod tests {
     use super::*;
 
+    // ---- power_stage_params ------------------------------------------------
+
+    /// Stage boundaries: every 16-unit boundary must flip to the correct stage.
     #[test]
-    fn bullet_count_from_power_ranges() {
-        assert_eq!(bullet_count_from_power(0), 1);
-        assert_eq!(bullet_count_from_power(31), 1);
-        assert_eq!(bullet_count_from_power(32), 3);
-        assert_eq!(bullet_count_from_power(63), 3);
-        assert_eq!(bullet_count_from_power(64), 4);
-        assert_eq!(bullet_count_from_power(95), 4);
-        assert_eq!(bullet_count_from_power(96), 5);
-        assert_eq!(bullet_count_from_power(128), 5);
+    fn power_stage_boundaries() {
+        // Stage 0 (0–15)
+        assert_eq!(power_stage_params(0).count, 1);
+        assert_eq!(power_stage_params(15).count, 1);
+        // Stage 1 (16–31)
+        assert_eq!(power_stage_params(16).count, 2);
+        assert_eq!(power_stage_params(31).count, 2);
+        // Stage 2 (32–47)
+        assert_eq!(power_stage_params(32).count, 3);
+        assert_eq!(power_stage_params(47).count, 3);
+        // Stage 3 (48–63): same count as stage 2, higher damage
+        assert_eq!(power_stage_params(48).count, 3);
+        assert_eq!(power_stage_params(63).count, 3);
+        // Stage 4 (64–79)
+        assert_eq!(power_stage_params(64).count, 4);
+        assert_eq!(power_stage_params(79).count, 4);
+        // Stage 5 (80–95): same count as stage 4, higher damage
+        assert_eq!(power_stage_params(80).count, 4);
+        assert_eq!(power_stage_params(95).count, 4);
+        // Stage 6 (96–111)
+        assert_eq!(power_stage_params(96).count, 5);
+        assert_eq!(power_stage_params(111).count, 5);
+        // Stage 7 (112–127): same count as stage 6, higher damage
+        assert_eq!(power_stage_params(112).count, 5);
+        assert_eq!(power_stage_params(127).count, 5);
+        // Stage 8 (128 MAX)
+        assert_eq!(power_stage_params(128).count, 5);
     }
+
+    /// Damage must be strictly non-decreasing as power increases.
+    #[test]
+    fn damage_non_decreasing() {
+        let checkpoints: &[u8] = &[0, 16, 32, 48, 64, 80, 96, 112, 128];
+        let damages: Vec<f32> = checkpoints
+            .iter()
+            .map(|&p| power_stage_params(p).damage)
+            .collect();
+        for window in damages.windows(2) {
+            assert!(
+                window[1] >= window[0],
+                "damage must not decrease: {} → {}",
+                window[0],
+                window[1]
+            );
+        }
+    }
+
+    /// Stage 0 must have spread == 0 so the single bullet goes straight up.
+    #[test]
+    fn stage_0_has_zero_spread() {
+        let stage = power_stage_params(0);
+        assert_eq!(stage.spread, 0.0, "single-bullet stage must have no spread");
+    }
+
+    /// All stages must have spread >= 0 and damage > 0.
+    #[test]
+    fn all_stages_valid() {
+        for power in [0u8, 16, 32, 48, 64, 80, 96, 112, 128] {
+            let p = power_stage_params(power);
+            assert!(p.count >= 1, "power {power}: count must be >= 1");
+            assert!(p.spread >= 0.0, "power {power}: spread must be >= 0");
+            assert!(p.damage > 0.0, "power {power}: damage must be > 0");
+        }
+    }
+
+    // ---- shoot_interval_from_power ----------------------------------------
+
+    /// Interval must be strictly non-increasing as power rises.
+    #[test]
+    fn interval_non_increasing() {
+        let checkpoints: &[u8] = &[0, 16, 32, 48, 64, 96, 128];
+        let intervals: Vec<f32> = checkpoints
+            .iter()
+            .map(|&p| shoot_interval_from_power(p))
+            .collect();
+        for window in intervals.windows(2) {
+            assert!(
+                window[1] <= window[0],
+                "interval must not increase: {} → {}",
+                window[0],
+                window[1]
+            );
+        }
+    }
+
+    /// All intervals must be positive.
+    #[test]
+    fn all_intervals_positive() {
+        for power in [0u8, 15, 16, 31, 32, 63, 64, 95, 96, 127, 128] {
+            assert!(
+                shoot_interval_from_power(power) > 0.0,
+                "power {power}: interval must be positive"
+            );
+        }
+    }
+
+    /// Power 128 (MAX) must have the shortest interval.
+    #[test]
+    fn max_power_has_shortest_interval() {
+        assert!(
+            shoot_interval_from_power(128) < shoot_interval_from_power(0),
+            "max power must fire faster than min power"
+        );
+    }
+
+    // ---- legacy tests (renamed) -------------------------------------------
 
     #[test]
     fn despawn_margin_is_positive() {
         assert!(DESPAWN_MARGIN > 0.0);
-    }
-
-    #[test]
-    fn bullet_count_max_is_five() {
-        // Power is capped at 128; ensure we never exceed 5 bullets.
-        assert_eq!(bullet_count_from_power(128), 5);
     }
 }
