@@ -1,5 +1,6 @@
 pub mod boss;
 pub mod bullet;
+pub mod effects;
 pub mod enemy;
 pub mod item;
 pub mod player;
@@ -9,6 +10,7 @@ pub use bullet::{
     BulletEmitter, BulletPattern, BulletTrail, BulletVelocity, DespawnOutOfBounds, EnemyBullet,
     EnemyBulletKind, PlayerBullet, ShootTimer,
 };
+pub use effects::FadeOut;
 pub use enemy::{Enemy, EnemyKind, EnemyMovement};
 pub use item::{ItemKind, ItemPhysics};
 pub use player::{GrazeVisual, InvincibilityTimer, Player, PlayerStats};

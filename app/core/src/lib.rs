@@ -15,8 +15,8 @@ pub mod systems;
 pub use components::{
     Boss, BossMovement, BossPhaseData, BossType, BulletEmitter, BulletPattern, BulletTrail,
     BulletVelocity, DespawnOutOfBounds, Enemy, EnemyBullet, EnemyBulletKind, EnemyKind,
-    EnemyMovement, GameSessionEntity, GrazeVisual, InvincibilityTimer, ItemKind, ItemPhysics,
-    Player, PlayerBullet, PlayerStats, ShootTimer,
+    EnemyMovement, FadeOut, GameSessionEntity, GrazeVisual, InvincibilityTimer, ItemKind,
+    ItemPhysics, Player, PlayerBullet, PlayerStats, ShootTimer,
 };
 pub use config::{
     EnemyBulletConfig, EnemyBulletConfigHandle, EnemyBulletConfigParams, FodderEnemyConfig,
@@ -252,7 +252,11 @@ impl Plugin for ScarletCorePlugin {
 
         app.add_systems(
             Update,
-            systems::player::update_invincibility.in_set(GameSystemSet::Effects),
+            (
+                systems::player::update_invincibility,
+                systems::effects::fade_out_system,
+            )
+                .in_set(GameSystemSet::Effects),
         );
 
         // Danmaku emitter systems.
