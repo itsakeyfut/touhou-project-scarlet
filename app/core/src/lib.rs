@@ -212,11 +212,14 @@ impl Plugin for ScarletCorePlugin {
 
         // StageControl systems — stage_control runs first to update elapsed_time,
         // then enemy_spawner uses the fresh time to process the script.
+        // on_boss_spawn_stage1 runs last to react to the BossSpawnEvent emitted
+        // by stage_control_system in the same frame.
         app.add_systems(
             Update,
             (
                 systems::stage::stage_control_system,
                 systems::enemy::spawner::enemy_spawner_system,
+                systems::boss::bosses::rumia::on_boss_spawn_stage1,
             )
                 .chain()
                 .in_set(GameSystemSet::StageControl),
