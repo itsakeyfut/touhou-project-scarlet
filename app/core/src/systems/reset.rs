@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 
-use crate::resources::{EnemySpawner, FragmentTracker, GameData, StageData};
+use crate::resources::{BombState, EnemySpawner, FragmentTracker, GameData, StageData};
 
 /// Resets all per-run gameplay resources to their starting values.
 ///
@@ -19,6 +19,7 @@ use crate::resources::{EnemySpawner, FragmentTracker, GameData, StageData};
 /// | [`EnemySpawner`] | [`EnemySpawner::default`] (empty script, index 0) |
 /// | [`StageData`] | [`StageData::default`] (stage 1, elapsed 0 s) |
 /// | [`FragmentTracker`] | [`FragmentTracker::default`] (fragments 0) |
+/// | [`BombState`] | [`BombState::default`] (inactive, timers elapsed) |
 ///
 /// `hi_score` is explicitly carried over from the previous run so that the
 /// session-best score survives GameOver → restart. Persistent cross-session
@@ -29,6 +30,7 @@ pub fn reset_per_run_resources(
     mut spawner: ResMut<EnemySpawner>,
     mut stage_data: ResMut<StageData>,
     mut tracker: ResMut<FragmentTracker>,
+    mut bomb_state: ResMut<BombState>,
 ) {
     let hi_score = game_data.hi_score;
     *game_data = GameData::new_game();
@@ -36,4 +38,5 @@ pub fn reset_per_run_resources(
     *spawner = EnemySpawner::default();
     *stage_data = StageData::default();
     *tracker = FragmentTracker::default();
+    *bomb_state = BombState::default();
 }

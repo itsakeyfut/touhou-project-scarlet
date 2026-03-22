@@ -12,7 +12,7 @@ use crate::{
     config::{EnemyBulletConfigParams, PlayerBulletConfigParams, PlayerConfigParams},
     constants::PLAY_AREA_HALF_H,
     events::{BossHitEvent, EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
-    resources::GameData,
+    resources::{BombState, COUNTER_BOMB_WINDOW_SECS, GameData},
     states::AppState,
 };
 
@@ -194,13 +194,14 @@ pub fn player_hit_detection(
     bullets: Query<(&Transform, &EnemyBulletKind), With<EnemyBullet>>,
     mut hit_events: MessageWriter<PlayerHitEvent>,
     enemy_bullet_cfg: EnemyBulletConfigParams,
+    bomb_state: Res<BombState>,
 ) {
     let Ok((player_tf, stats, invincibility)) = player.single() else {
         return;
     };
 
-    // Skip detection while the player is invincible.
-    if invincibility.is_some() {
+    // Skip detection while the player is post-hit invincible or bomb-invincible.
+    if invincibility.is_some() || bomb_state.is_invincible() {
         return;
     }
 
@@ -237,6 +238,7 @@ pub fn handle_player_hit(
     mut player: Query<(Entity, &mut Transform), With<Player>>,
     mut next_state: ResMut<NextState<AppState>>,
     player_cfg: PlayerConfigParams,
+    mut bomb_state: ResMut<BombState>,
 ) {
     // Only react to the first event per frame.
     let Some(_event) = hit_events.read().next() else {
@@ -246,6 +248,10 @@ pub fn handle_player_hit(
     let Ok((player_entity, mut transform)) = player.single_mut() else {
         return;
     };
+
+    // Open the counter-bomb window so that bomb_input_system can cancel this
+    // hit during the next few frames.
+    bomb_state.counter_bomb_window = COUNTER_BOMB_WINDOW_SECS;
 
     // Decrement lives (saturating prevents wrapping on u8).
     game_data.lives = game_data.lives.saturating_sub(1);

@@ -112,6 +112,20 @@ pub struct BossHitEvent {
     pub entity: Entity,
 }
 
+/// Fired when the player activates a bomb (X key with bombs > 0).
+///
+/// Emitted by [`crate::systems::bomb::bomb_input_system`] in the same frame
+/// the X key is pressed. Consumed by:
+/// - [`crate::systems::bomb::bomb_effect_system`] to clear all enemy bullets
+///   and award bonus score.
+/// - Future audio / visual systems to play the bomb animation.
+#[derive(Event, Message)]
+pub struct BombUsedEvent {
+    /// `true` when the bomb cancelled an in-progress hit within the
+    /// [`crate::resources::COUNTER_BOMB_WINDOW_SECS`] window.
+    pub is_counter_bomb: bool,
+}
+
 /// Fired when an enemy bullet newly enters the player's graze zone (16 px).
 ///
 /// Consumed by [`crate::shaders::plugin::update_graze_material`] to trigger

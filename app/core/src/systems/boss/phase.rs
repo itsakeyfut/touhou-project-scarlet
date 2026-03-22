@@ -2,13 +2,13 @@ use bevy::prelude::*;
 
 use crate::{
     components::{
+        GameSessionEntity,
         boss::Boss,
         bullet::{BulletEmitter, EnemyBullet},
-        GameSessionEntity,
     },
     events::{BossPhaseChangedEvent, EnemyDefeatedEvent},
     resources::{GameData, StageData},
-    shaders::{SpellCardBgMaterial, SpellCardBackground},
+    shaders::{SpellCardBackground, SpellCardBgMaterial},
 };
 
 // ---------------------------------------------------------------------------
@@ -41,6 +41,7 @@ use crate::{
 /// from happening on subsequent frames the emitter is set `active = false` here
 /// so `bullet_emitter_system` skips it until the `Commands`-deferred insert
 /// from [`update_boss_emitter_on_phase_change`] replaces it at end-of-frame.
+#[allow(clippy::too_many_arguments)]
 pub fn boss_phase_system(
     mut commands: Commands,
     mut bosses: Query<(Entity, &mut Boss, &Transform)>,
@@ -300,7 +301,10 @@ mod tests {
             is_spell_card: is_spell,
             spell_card_name: None,
             time_limit_secs: 30.0,
-            pattern: BulletPattern::Ring { count: 8, speed: 100.0 },
+            pattern: BulletPattern::Ring {
+                count: 8,
+                speed: 100.0,
+            },
             bullet_kind: EnemyBulletKind::SmallRound,
             fire_interval_secs: 0.5,
             movement: BossMovement::Static,
@@ -366,16 +370,25 @@ mod tests {
         let phases = vec![make_phase(500.0, false, 0)];
         let next_phase_idx = 1; // advance past the only phase
         let boss_defeated = next_phase_idx >= phases.len();
-        assert!(boss_defeated, "advancing past the last phase must defeat the boss");
+        assert!(
+            boss_defeated,
+            "advancing past the last phase must defeat the boss"
+        );
     }
 
     /// Advancing within available phases must NOT mark the boss as defeated.
     #[test]
     fn mid_transition_does_not_mark_boss_defeated() {
-        let phases = vec![make_phase(500.0, false, 0), make_phase(800.0, true, 1_000_000)];
+        let phases = vec![
+            make_phase(500.0, false, 0),
+            make_phase(800.0, true, 1_000_000),
+        ];
         let next_phase_idx = 1;
         let boss_defeated = next_phase_idx >= phases.len();
-        assert!(!boss_defeated, "mid-boss transition must not defeat the boss");
+        assert!(
+            !boss_defeated,
+            "mid-boss transition must not defeat the boss"
+        );
     }
 
     /// `Boss::new` must initialise `spell_card_active` from the first phase.
@@ -383,7 +396,10 @@ mod tests {
     fn boss_spell_card_active_reflects_first_phase() {
         let boss = Boss::new(
             BossType::Rumia,
-            vec![make_phase(500.0, false, 0), make_phase(800.0, true, 1_000_000)],
+            vec![
+                make_phase(500.0, false, 0),
+                make_phase(800.0, true, 1_000_000),
+            ],
         );
         assert!(!boss.spell_card_active, "first phase is not a spell card");
     }
@@ -391,7 +407,10 @@ mod tests {
     /// After simulating a phase advance, `spell_card_active` should update.
     #[test]
     fn phase_advance_updates_spell_card_active() {
-        let phases = vec![make_phase(500.0, false, 0), make_phase(800.0, true, 1_000_000)];
+        let phases = vec![
+            make_phase(500.0, false, 0),
+            make_phase(800.0, true, 1_000_000),
+        ];
         let next_idx = 1;
         let next_is_spell = phases[next_idx].is_spell_card;
         assert!(next_is_spell, "second phase is a spell card");
