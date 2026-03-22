@@ -186,6 +186,30 @@ impl Plugin for ScarletCorePlugin {
                 .in_set(GameSystemSet::GameLogic),
         );
 
+        // Boss phase transition systems — chained so that emitter-swap and
+        // spell-card-background systems see the BossPhaseChangedEvent written
+        // by boss_phase_system in the same frame.
+        app.add_systems(
+            Update,
+            (
+                systems::boss::phase::boss_phase_system,
+                (
+                    systems::boss::phase::update_boss_emitter_on_phase_change,
+                    systems::boss::phase::on_spell_card_start,
+                ),
+            )
+                .chain()
+                .in_set(GameSystemSet::GameLogic),
+        );
+
+        // Spawn the spell-card background when a boss's initial phase is already
+        // a spell card (BossPhaseChangedEvent is not emitted for phase 0).
+        app.add_systems(
+            Update,
+            systems::boss::phase::spawn_initial_spell_card_bg
+                .in_set(GameSystemSet::GameLogic),
+        );
+
         // StageControl systems — stage_control runs first to update elapsed_time,
         // then enemy_spawner uses the fresh time to process the script.
         app.add_systems(
