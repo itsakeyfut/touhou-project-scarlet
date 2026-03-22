@@ -258,7 +258,10 @@ mod tests {
             is_spell_card,
             spell_card_name: None,
             time_limit_secs: 30.0,
-            pattern: BulletPattern::Ring { count: 8, speed: 100.0 },
+            pattern: BulletPattern::Ring {
+                count: 8,
+                speed: 100.0,
+            },
             bullet_kind: EnemyBulletKind::SmallRound,
             fire_interval_secs: 0.5,
             movement: BossMovement::Static,

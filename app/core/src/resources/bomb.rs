@@ -167,7 +167,10 @@ mod tests {
         let state = BombState::default();
         assert!(!state.active, "default BombState must not be active");
         assert_eq!(state.counter_bomb_window, 0.0);
-        assert!(!state.pending_death, "default BombState must not be pending_death");
+        assert!(
+            !state.pending_death,
+            "default BombState must not be pending_death"
+        );
         assert!(
             !state.is_invincible(),
             "default BombState must not be invincible"

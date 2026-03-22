@@ -7,7 +7,7 @@ use crate::{
     events::{BossHitEvent, GrazeEvent},
     shaders::{
         BulletGlowMaterial, BulletTrailMaterial, GrazeMaterial, HitFlashMaterial,
-        SpellCardBgMaterial, SpellCardBackground,
+        SpellCardBackground, SpellCardBgMaterial,
     },
     states::AppState,
 };

@@ -2,10 +2,10 @@ use bevy::prelude::*;
 
 use crate::{
     components::{
+        GameSessionEntity,
         boss::{Boss, BossMovement, BossPhaseData, BossType},
         bullet::{BulletEmitter, BulletPattern, EnemyBulletKind},
         enemy::Enemy,
-        GameSessionEntity,
     },
     events::BossSpawnEvent,
     resources::StageData,
@@ -264,7 +264,10 @@ mod tests {
         let phases = rumia_phases();
         let p = &phases[2];
         assert!(p.is_spell_card, "phase 2 must be a spell card");
-        assert_eq!(p.spell_card_name.as_deref(), Some("闇符「ディマーケーション」"));
+        assert_eq!(
+            p.spell_card_name.as_deref(),
+            Some("闇符「ディマーケーション」")
+        );
         assert_eq!(p.spell_card_bonus, P2_BONUS);
     }
 
@@ -278,8 +281,14 @@ mod tests {
                 (phase.hp - phase.hp_max).abs() < 1e-6,
                 "phase {i} hp must equal hp_max at start"
             );
-            assert!(phase.time_limit_secs > 0.0, "phase {i} time limit must be positive");
-            assert!(phase.fire_interval_secs > 0.0, "phase {i} fire interval must be positive");
+            assert!(
+                phase.time_limit_secs > 0.0,
+                "phase {i} time limit must be positive"
+            );
+            assert!(
+                phase.fire_interval_secs > 0.0,
+                "phase {i} fire interval must be positive"
+            );
         }
     }
 

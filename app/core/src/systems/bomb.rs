@@ -238,7 +238,10 @@ mod tests {
         // Simulate counter-bomb path.
         state.counter_bomb_window = 0.0;
         state.pending_death = false;
-        assert!(!state.pending_death, "counter-bomb must clear pending_death");
+        assert!(
+            !state.pending_death,
+            "counter-bomb must clear pending_death"
+        );
     }
 
     /// pending_death triggers GameOver when window drains to zero.

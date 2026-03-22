@@ -260,7 +260,10 @@ mod tests {
         // One tick of 3.5 s — should advance 3 waypoints (indices 0→3) and leave 0.5 s remainder.
         teleport_tick(&mut current, &mut elapsed, wait_secs, 3.5, len);
         assert_eq!(current, 3, "3.5 s / 1.0 s = 3 steps");
-        assert!((elapsed - 0.5).abs() < 1e-4, "remainder should be 0.5, got {elapsed}");
+        assert!(
+            (elapsed - 0.5).abs() < 1e-4,
+            "remainder should be 0.5, got {elapsed}"
+        );
     }
 
     /// Play-area clamp: values outside bounds must be clamped.
