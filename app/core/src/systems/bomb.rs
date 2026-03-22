@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use crate::{
-    components::bullet::EnemyBullet,
+    components::{bullet::EnemyBullet, effects::FadeOut},
     events::BombUsedEvent,
     resources::{BOMB_DURATION_SECS, BOMB_INVINCIBLE_SECS, BombState, GameData},
     states::AppState,
@@ -126,25 +126,33 @@ pub fn bomb_active_system(mut bomb_state: ResMut<BombState>, time: Res<Time>) {
 // bomb_effect_system
 // ---------------------------------------------------------------------------
 
-/// While the bomb is active, despawns all enemy bullets and awards 10 points
+/// Duration of the bullet fade-out effect applied by the bomb (seconds).
+const BOMB_BULLET_FADE_SECS: f32 = 0.3;
+
+/// While the bomb is active, fades out all enemy bullets and awards 10 points
 /// per bullet cleared.
 ///
+/// Bullets that do not yet have a [`FadeOut`] component receive one with a
+/// short [`BOMB_BULLET_FADE_SECS`] duration. The `Without<FadeOut>` filter
+/// prevents double-counting bullets across consecutive frames of a bomb.
+/// [`crate::systems::effects::fade_out_system`] handles the alpha decay and
+/// final despawn once the timer expires.
+///
 /// Running every frame while `bomb_state.active` ensures that bullets spawned
-/// during the bomb (e.g. from a boss emitter that was not yet silenced) are
-/// also cleared.
+/// during the bomb (e.g. from a boss emitter that was not yet silenced in the
+/// same frame) are also faded.
 ///
 /// # Score
 ///
-/// Each cleared bullet awards 10 points, consistent with the Phase 09
-/// specification. Score is added directly to [`GameData::score`]; no event is
-/// emitted for individual bullets.
+/// Each bullet that starts fading awards 10 points immediately. Score is added
+/// directly to [`GameData::score`]; no event is emitted for individual bullets.
 ///
 /// Registered in [`crate::GameSystemSet::GameLogic`] so it runs after
 /// [`crate::GameSystemSet::Collision`] — graze counts are finalised before
-/// bullets are removed.
+/// bullets begin fading.
 pub fn bomb_effect_system(
     mut commands: Commands,
-    enemy_bullets: Query<Entity, With<EnemyBullet>>,
+    enemy_bullets: Query<Entity, (With<EnemyBullet>, Without<FadeOut>)>,
     bomb_state: Res<BombState>,
     mut game_data: ResMut<GameData>,
 ) {
@@ -154,7 +162,9 @@ pub fn bomb_effect_system(
 
     let mut cleared: u64 = 0;
     for entity in &enemy_bullets {
-        commands.entity(entity).despawn();
+        commands
+            .entity(entity)
+            .insert(FadeOut::new(BOMB_BULLET_FADE_SECS));
         cleared += 1;
     }
 

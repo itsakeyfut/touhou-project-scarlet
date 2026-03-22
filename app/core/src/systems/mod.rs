@@ -4,6 +4,7 @@ pub mod bullet;
 pub mod cleanup;
 pub mod collision;
 pub mod danmaku;
+pub mod effects;
 pub mod enemy;
 pub mod item;
 pub mod loading;
