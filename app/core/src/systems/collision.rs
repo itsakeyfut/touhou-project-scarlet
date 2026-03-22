@@ -6,6 +6,7 @@ use crate::{
     components::{
         boss::Boss,
         bullet::{EnemyBullet, EnemyBulletKind, PlayerBullet},
+        effects::FadeOut,
         enemy::Enemy,
         player::{InvincibilityTimer, Player, PlayerStats},
     },
@@ -14,6 +15,26 @@ use crate::{
     events::{BossHitEvent, EnemyDefeatedEvent, GrazeEvent, PlayerHitEvent},
     resources::{BombState, COUNTER_BOMB_WINDOW_SECS, GameData},
 };
+
+// ---------------------------------------------------------------------------
+// Query type aliases
+// ---------------------------------------------------------------------------
+
+/// Active (non-fading) enemy bullets suitable for hit detection.
+type ActiveEnemyBullets<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Transform, &'static EnemyBulletKind),
+    (With<EnemyBullet>, Without<FadeOut>),
+>;
+
+/// Active (non-fading) enemy bullets with entity ID, used for graze detection.
+type ActiveEnemyBulletsWithEntity<'w, 's> = Query<
+    'w,
+    's,
+    (Entity, &'static Transform, &'static EnemyBulletKind),
+    (With<EnemyBullet>, Without<FadeOut>),
+>;
 
 // ---------------------------------------------------------------------------
 // Collision utility
@@ -190,7 +211,7 @@ pub fn player_bullet_hit_boss(
 /// Registered in [`crate::GameSystemSet::Collision`].
 pub fn player_hit_detection(
     player: Query<(&Transform, &PlayerStats, Option<&InvincibilityTimer>), With<Player>>,
-    bullets: Query<(&Transform, &EnemyBulletKind), With<EnemyBullet>>,
+    bullets: ActiveEnemyBullets,
     mut hit_events: MessageWriter<PlayerHitEvent>,
     enemy_bullet_cfg: EnemyBulletConfigParams,
     bomb_state: Res<BombState>,
@@ -304,7 +325,7 @@ pub fn handle_player_hit(
 /// Registered in [`crate::GameSystemSet::Collision`].
 pub fn graze_detection_system(
     player: Query<(&Transform, &PlayerStats), With<Player>>,
-    bullets: Query<(Entity, &Transform, &EnemyBulletKind), With<EnemyBullet>>,
+    bullets: ActiveEnemyBulletsWithEntity,
     mut game_data: ResMut<GameData>,
     mut graze_set: Local<HashSet<Entity>>,
     mut graze_events: MessageWriter<GrazeEvent>,
