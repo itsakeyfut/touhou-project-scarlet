@@ -115,6 +115,10 @@ impl Plugin for ScarletCorePlugin {
                     systems::player::shoot_input_system,
                 )
                     .in_set(GameSystemSet::Input),
+            )
+            .add_systems(
+                Update,
+                systems::player::update_shoot_timer_system.in_set(GameSystemSet::PlayerLogic),
             );
 
         // Bomb systems.

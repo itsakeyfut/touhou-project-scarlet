@@ -9,6 +9,8 @@ use crate::{
     config::PlayerConfigParams,
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
     events::ShootEvent,
+    resources::GameData,
+    systems::bullet::shoot_interval_from_power,
 };
 
 /// Spawns the player entity at the bottom-center of the play area.
@@ -30,7 +32,9 @@ pub fn spawn_player(mut commands: Commands, player_cfg: PlayerConfigParams) {
             pickup_radius: player_cfg.pickup_radius(),
         },
         ShootTimer {
-            timer: Timer::from_seconds(player_cfg.shoot_interval_secs(), TimerMode::Repeating),
+            // Initial interval matches power 0; update_shoot_timer_system
+            // adjusts it dynamically as power changes during play.
+            timer: Timer::from_seconds(shoot_interval_from_power(0), TimerMode::Repeating),
         },
         Sprite {
             color: Color::srgb(1.0, 0.3, 0.3),
@@ -137,6 +141,38 @@ pub fn update_invincibility(
         let visible = ((invincibility.timer.elapsed_secs() * 10.0) as u32).is_multiple_of(2);
         sprite.color = sprite.color.with_alpha(if visible { 1.0 } else { 0.2 });
     }
+}
+
+/// Updates [`ShootTimer`] duration whenever the player's power level changes.
+///
+/// Uses a [`Local`] to track the last-known power value. When `game_data.power`
+/// differs, `ShootTimer.timer` is set to the new interval from
+/// [`shoot_interval_from_power`] without resetting elapsed time, so the next
+/// shot fires at the correct cadence with minimal disruption.
+///
+/// Both power-up and power-down paths are handled: power increases when items
+/// are collected; power decreases by 16 when the player is hit.
+///
+/// Registered in [`crate::GameSystemSet::PlayerLogic`].
+pub fn update_shoot_timer_system(
+    mut player: Query<&mut ShootTimer, With<Player>>,
+    game_data: Res<GameData>,
+    mut prev_power: Local<u8>,
+) {
+    let power = game_data.power;
+    if power == *prev_power {
+        return;
+    }
+    *prev_power = power;
+
+    let Ok(mut timer) = player.single_mut() else {
+        return;
+    };
+
+    let interval = shoot_interval_from_power(power);
+    timer
+        .timer
+        .set_duration(std::time::Duration::from_secs_f32(interval));
 }
 
 #[cfg(test)]
