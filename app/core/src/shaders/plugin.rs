@@ -360,7 +360,9 @@ pub fn update_bomb_reimu_material(
     } else {
         (1.0 - frac) / 0.3
     };
-    let expand_radius = frac;
+    // Use sqrt so the ring expands quickly at first and slows near the edges,
+    // making the barrier feel more "explosive" and ensuring early visibility.
+    let expand_radius = frac.sqrt();
 
     for handle in &visuals {
         let Some(mat) = materials.get_mut(handle) else {
