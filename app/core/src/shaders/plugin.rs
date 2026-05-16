@@ -5,7 +5,7 @@ use crate::game_set::GameSystemSet;
 use crate::{
     components::player::{GrazeVisual, Player},
     events::{BossHitEvent, GrazeEvent},
-    resources::{BombState, BOMB_DURATION_SECS},
+    resources::{BOMB_DURATION_SECS, BombState},
     shaders::{
         BombMarisaMaterial, BombMarisaVisual, BombReimuMaterial, BombReimuVisual,
         BulletGlowMaterial, BulletTrailMaterial, GrazeMaterial, HitFlashMaterial,
@@ -365,11 +365,7 @@ pub fn update_bomb_reimu_material(
     let t = time.elapsed_secs();
     let frac = bomb_state.active_timer.fraction();
     // Stay at full opacity for the first 70 %, then fade out to 0.
-    let intensity = if frac < 0.7 {
-        1.0
-    } else {
-        (1.0 - frac) / 0.3
-    };
+    let intensity = if frac < 0.7 { 1.0 } else { (1.0 - frac) / 0.3 };
     // Start at 0.3 (already visible) and expand to 1.0 with a sqrt curve
     // so the barrier feels explosive early and slows as it fills the area.
     let expand_radius = 0.3 + 0.7 * frac.sqrt();
@@ -404,11 +400,7 @@ pub fn update_bomb_marisa_material(
     }
     let t = time.elapsed_secs();
     let frac = bomb_state.active_timer.fraction();
-    let intensity = if frac < 0.7 {
-        1.0
-    } else {
-        (1.0 - frac) / 0.3
-    };
+    let intensity = if frac < 0.7 { 1.0 } else { (1.0 - frac) / 0.3 };
     // Ramp width up over the first 0.3 s of the bomb (≈ 8.6 % of 3.5 s).
     let width_ramp_frac = 0.3 / BOMB_DURATION_SECS;
     let width = (frac / width_ramp_frac).min(1.0);
