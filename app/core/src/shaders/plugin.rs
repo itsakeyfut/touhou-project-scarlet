@@ -5,7 +5,9 @@ use crate::game_set::GameSystemSet;
 use crate::{
     components::player::{GrazeVisual, Player},
     events::{BossHitEvent, GrazeEvent},
+    resources::{BombState, BOMB_DURATION_SECS},
     shaders::{
+        BombMarisaMaterial, BombMarisaVisual, BombReimuMaterial, BombReimuVisual,
         BulletGlowMaterial, BulletTrailMaterial, GrazeMaterial, HitFlashMaterial,
         SpellCardBackground, SpellCardBgMaterial,
     },
@@ -36,6 +38,10 @@ impl Plugin for ScarletShadersPlugin {
         // Phase 08 materials.
         app.add_plugins(Material2dPlugin::<HitFlashMaterial>::default())
             .add_plugins(Material2dPlugin::<SpellCardBgMaterial>::default());
+
+        // Phase 09 materials.
+        app.add_plugins(Material2dPlugin::<BombReimuMaterial>::default())
+            .add_plugins(Material2dPlugin::<BombMarisaMaterial>::default());
 
         // Uniform time updates — only while the game is running.
         app.add_systems(
@@ -70,7 +76,28 @@ impl Plugin for ScarletShadersPlugin {
                 .run_if(in_state(AppState::Playing)),
         );
 
-        // TODO(phase-09): add Material2dPlugin::<BombReimuMaterial>, BombMarisaMaterial
+        // Bomb visual systems — spawn on BombUsedEvent, update uniforms each frame,
+        // then despawn when the bomb becomes inactive.
+        //
+        // Spawn runs in Effects set so it sees the BombUsedEvent emitted by
+        // bomb_input_system (Input set) in the same frame.
+        // Update runs after Effects so uniforms are fresh before render.
+        // Despawn runs in Cleanup so entities are removed after all Effects.
+        //
+        // TODO(character-select): replace spawn_bomb_reimu_visual with a
+        //   character-aware dispatch once SelectedCharacter is implemented.
+        app.add_systems(
+            Update,
+            (
+                spawn_bomb_reimu_visual.in_set(GameSystemSet::Effects),
+                spawn_bomb_marisa_visual.in_set(GameSystemSet::Effects),
+                update_bomb_reimu_material.after(GameSystemSet::Effects),
+                update_bomb_marisa_material.after(GameSystemSet::Effects),
+                despawn_finished_bomb_visuals.in_set(GameSystemSet::Cleanup),
+            )
+                .run_if(in_state(AppState::Playing)),
+        );
+
         // TODO(phase-12): add Material2dPlugin::<PixelOutlineMaterial>
     }
 }
@@ -233,5 +260,187 @@ pub fn update_spell_card_bg_time(
         };
         mat.time = t;
         mat.intensity = (mat.intensity + dt * 2.0).min(1.0);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bomb visual systems
+// ---------------------------------------------------------------------------
+
+/// Play-area dimensions used for full-screen bomb effect meshes (px).
+const PLAY_AREA_W: f32 = 384.0;
+const PLAY_AREA_H: f32 = 448.0;
+
+/// Z-layer for bomb visual entities — above gameplay sprites (z ≤ 3) but
+/// below the HUD layer.
+const BOMB_VISUAL_Z: f32 = 9.0;
+
+/// Spawns a [`BombReimuVisual`] entity on the rising edge of [`BombState::active`].
+///
+/// Uses a `Local<bool>` to detect the transition from inactive → active so the
+/// entity is spawned exactly once per bomb activation, without relying on
+/// [`BombUsedEvent`] delivery timing across the double-buffered message system.
+///
+/// The entity is a full-play-area `Mesh2d(Rectangle)` using
+/// [`BombReimuMaterial`]. Uniforms are updated each frame by
+/// [`update_bomb_reimu_material`] and the entity is despawned by
+/// [`despawn_finished_bomb_visuals`] when the bomb expires.
+///
+/// # Character selection
+///
+/// Until `SelectedCharacter` is implemented, this system always spawns.
+/// TODO(character-select): gate on `SelectedCharacter == Reimu`.
+///
+/// Registered in [`ScarletShadersPlugin`] under [`GameSystemSet::Effects`].
+pub fn spawn_bomb_reimu_visual(
+    mut commands: Commands,
+    bomb_state: Res<BombState>,
+    mut was_active: Local<bool>,
+    mut bomb_materials: ResMut<Assets<BombReimuMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let just_activated = bomb_state.active && !*was_active;
+    *was_active = bomb_state.active;
+
+    if just_activated {
+        commands.spawn((
+            BombReimuVisual,
+            Mesh2d(meshes.add(Rectangle::new(PLAY_AREA_W, PLAY_AREA_H))),
+            MeshMaterial2d(bomb_materials.add(BombReimuMaterial::default())),
+            Transform::from_xyz(0.0, 0.0, BOMB_VISUAL_Z),
+        ));
+    }
+}
+
+/// Spawns a [`BombMarisaVisual`] entity on the rising edge of [`BombState::active`].
+///
+/// Uses a `Local<bool>` (same pattern as [`spawn_bomb_reimu_visual`]) to detect
+/// the inactive → active transition without relying on event delivery timing.
+///
+/// # Character selection
+///
+/// Until `SelectedCharacter` is implemented, both this system and
+/// [`spawn_bomb_reimu_visual`] fire on every bomb activation.
+/// TODO(character-select): gate on `SelectedCharacter == Marisa`.
+///
+/// Registered in [`ScarletShadersPlugin`] under [`GameSystemSet::Effects`].
+pub fn spawn_bomb_marisa_visual(
+    mut commands: Commands,
+    bomb_state: Res<BombState>,
+    mut was_active: Local<bool>,
+    mut bomb_materials: ResMut<Assets<BombMarisaMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
+    let just_activated = bomb_state.active && !*was_active;
+    *was_active = bomb_state.active;
+
+    if just_activated {
+        commands.spawn((
+            BombMarisaVisual,
+            Mesh2d(meshes.add(Rectangle::new(PLAY_AREA_W, PLAY_AREA_H))),
+            MeshMaterial2d(bomb_materials.add(BombMarisaMaterial::default())),
+            Transform::from_xyz(0.0, 0.0, BOMB_VISUAL_Z),
+        ));
+    }
+}
+
+/// Updates [`BombReimuMaterial`] uniforms every frame while the bomb is active.
+///
+/// | Uniform         | Behaviour |
+/// |-----------------|-----------|
+/// | `time`          | Set to `time.elapsed_secs()` for animation. |
+/// | `intensity`     | `1.0` until the last 30 % of the active phase, then linearly fades to `0.0`. |
+/// | `expand_radius` | Linearly ramps from `0.0` to `1.0` over [`BOMB_DURATION_SECS`]. |
+///
+/// Registered in [`ScarletShadersPlugin`] after [`GameSystemSet::Effects`].
+pub fn update_bomb_reimu_material(
+    time: Res<Time>,
+    bomb_state: Res<BombState>,
+    visuals: Query<&MeshMaterial2d<BombReimuMaterial>, With<BombReimuVisual>>,
+    mut materials: ResMut<Assets<BombReimuMaterial>>,
+) {
+    if !bomb_state.active {
+        return;
+    }
+    let t = time.elapsed_secs();
+    let frac = bomb_state.active_timer.fraction();
+    // Stay at full opacity for the first 70 %, then fade out to 0.
+    let intensity = if frac < 0.7 {
+        1.0
+    } else {
+        (1.0 - frac) / 0.3
+    };
+    // Start at 0.3 (already visible) and expand to 1.0 with a sqrt curve
+    // so the barrier feels explosive early and slows as it fills the area.
+    let expand_radius = 0.3 + 0.7 * frac.sqrt();
+
+    for handle in &visuals {
+        let Some(mat) = materials.get_mut(handle) else {
+            continue;
+        };
+        mat.time = t;
+        mat.intensity = intensity;
+        mat.expand_radius = expand_radius;
+    }
+}
+
+/// Updates [`BombMarisaMaterial`] uniforms every frame while the bomb is active.
+///
+/// | Uniform     | Behaviour |
+/// |-------------|-----------|
+/// | `time`      | Set to `time.elapsed_secs()` for animation. |
+/// | `intensity` | `1.0` until the last 30 % of the active phase, then fades to `0.0`. |
+/// | `width`     | Ramps from `0.0` to `1.0` in the first `0.3 / BOMB_DURATION_SECS` fraction. |
+///
+/// Registered in [`ScarletShadersPlugin`] after [`GameSystemSet::Effects`].
+pub fn update_bomb_marisa_material(
+    time: Res<Time>,
+    bomb_state: Res<BombState>,
+    visuals: Query<&MeshMaterial2d<BombMarisaMaterial>, With<BombMarisaVisual>>,
+    mut materials: ResMut<Assets<BombMarisaMaterial>>,
+) {
+    if !bomb_state.active {
+        return;
+    }
+    let t = time.elapsed_secs();
+    let frac = bomb_state.active_timer.fraction();
+    let intensity = if frac < 0.7 {
+        1.0
+    } else {
+        (1.0 - frac) / 0.3
+    };
+    // Ramp width up over the first 0.3 s of the bomb (≈ 8.6 % of 3.5 s).
+    let width_ramp_frac = 0.3 / BOMB_DURATION_SECS;
+    let width = (frac / width_ramp_frac).min(1.0);
+
+    for handle in &visuals {
+        let Some(mat) = materials.get_mut(handle) else {
+            continue;
+        };
+        mat.time = t;
+        mat.intensity = intensity;
+        mat.width = width;
+    }
+}
+
+/// Despawns [`BombReimuVisual`] and [`BombMarisaVisual`] entities once
+/// [`BombState::active`] becomes `false`.
+///
+/// Runs in [`GameSystemSet::Cleanup`] so the entities are removed after all
+/// per-frame effects have been applied.
+pub fn despawn_finished_bomb_visuals(
+    mut commands: Commands,
+    bomb_state: Res<BombState>,
+    reimu_visuals: Query<Entity, With<BombReimuVisual>>,
+    marisa_visuals: Query<Entity, With<BombMarisaVisual>>,
+) {
+    if bomb_state.active {
+        return;
+    }
+    for entity in &reimu_visuals {
+        commands.entity(entity).despawn();
+    }
+    for entity in &marisa_visuals {
+        commands.entity(entity).despawn();
     }
 }
