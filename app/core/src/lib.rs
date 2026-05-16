@@ -24,7 +24,10 @@ pub use config::{
     GameRulesConfigParams, PlayerBulletConfig, PlayerBulletConfigHandle, PlayerBulletConfigParams,
     PlayerConfig, PlayerConfigHandle, PlayerConfigParams, ScarletConfigPlugin,
 };
-pub use constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH};
+pub use constants::{
+    PLAY_AREA_HALF_H, PLAY_AREA_HALF_W, PLAY_AREA_HEIGHT, PLAY_AREA_WIDTH, STAGE_CLEAR_SCORE_BONUS,
+    TOTAL_STAGES,
+};
 pub use events::{
     BombUsedEvent, BossHitEvent, BossPhaseChangedEvent, BossSpawnEvent, EnemyDefeatedEvent,
     ExtendEvent, ExtendKind, GrazeEvent, PlayerHitEvent, ShootEvent,
@@ -282,6 +285,13 @@ impl Plugin for ScarletCorePlugin {
         app.add_systems(
             OnExit(AppState::Playing),
             systems::cleanup::cleanup_game_session,
+        );
+
+        // Stage-clear handler: awards bonus, updates hi_score, and either
+        // advances to the next stage or transitions to Ending on the final stage.
+        app.add_systems(
+            OnEnter(AppState::StageClear),
+            systems::stage_clear::on_stage_clear,
         );
 
         #[cfg(feature = "debug-hitbox")]
