@@ -6,16 +6,11 @@
 // Uniforms: see `BombReimuMaterial` in `app/core/src/shaders/bomb_reimu.rs`.
 
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
-#import "shaders/common/math.wgsl"::{TAU, rotate2d}
 
 struct BombReimuMaterial {
-    /// Seconds elapsed since the bomb was activated.
     time: f32,
-    /// Fade multiplier in [0.0, 1.0]. 1.0 = fully visible, 0.0 = invisible.
     intensity: f32,
-    /// Expand progress in [0.0, 1.0]; drives the barrier radius.
     expand_radius: f32,
-    /// Struct padding.
     _padding: f32,
 }
 
@@ -24,42 +19,51 @@ var<uniform> material: BombReimuMaterial;
 
 @fragment
 fn fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    let center = in.uv - vec2<f32>(0.5, 0.5);
-    let dist   = length(center);
-    let angle  = atan2(center.y, center.x);
     let t      = material.time;
+    let intens = material.intensity;
 
-    // --- Hexagonal boundary ring ------------------------------------------
-    // Map angle into one of six equal sectors, compute the "hex distance".
-    let sector_angle = TAU / 6.0;
-    let hex_angle    = fract(angle / TAU + 1.0) * TAU; // normalise to [0, TAU)
-    let local_angle  = hex_angle - floor(hex_angle / sector_angle) * sector_angle;
-    let hex_dist     = dist / cos(local_angle - sector_angle * 0.5);
+    // Centre at (0,0). UV space is [-0.5, 0.5] x [-0.5, 0.5].
+    let c     = in.uv - vec2<f32>(0.5, 0.5);
+    let dist  = length(c);
+    let angle = atan2(c.y, c.x);
 
-    let ring_r   = material.expand_radius * 0.48;
-    let ring_raw = abs(hex_dist - ring_r) - 0.008;
-    let ring     = smoothstep(0.012, 0.0, ring_raw);
+    // Slowly rotate the hexagonal grid (manual rotation, no helper needed).
+    let rs = sin(t * 0.25);
+    let rc = cos(t * 0.25);
+    let hx = rc * c.x - rs * c.y;
+    let hy = rs * c.x + rc * c.y;
 
-    // --- Inner yin-yang ripple pattern ------------------------------------
-    // Animated sin rings modulated by the rotation angle, visible inside the ring.
-    let spin    = angle * 6.0 + t * 2.5;
-    let ripple  = 0.25 + 0.15 * sin(spin) * sin(dist * 14.0 - t * 1.5);
-    let inner   = select(0.0, ripple, dist < ring_r);
+    // Hexagonal SDF — flat-top hex, inlined.
+    // hex_d == 1.0 on the boundary of a unit hexagon; scales linearly.
+    let hq    = abs(vec2<f32>(hx, hy));
+    let hex_d = max(hq.x * 0.866025 + hq.y * 0.5, hq.y);
 
-    // --- Rotating 8-fold star rays ----------------------------------------
-    let star_a  = fract(angle / TAU * 8.0 + t * 0.08);
-    let ray     = pow(max(0.0, sin(star_a * TAU)), 8.0) * 0.18;
-    let rays    = select(0.0, ray, dist < ring_r - 0.03);
+    // Expanding hexagonal ring. ring_r ranges 0.135 → 0.45 in UV hex-space.
+    let ring_r = material.expand_radius * 0.45;
+    let ring   = max(0.0, 1.0 - abs(hex_d - ring_r) / 0.04);
 
-    // --- Yin-yang colour split --------------------------------------------
-    let yin_yang    = step(0.5, fract(angle / TAU + t * 0.06));
-    let crimson     = vec3<f32>(2.0, 0.25, 0.35);  // HDR crimson (Reimu red)
-    let ivory       = vec3<f32>(2.0, 1.9,  1.8);   // HDR near-white
-    let base_color  = mix(crimson, ivory, yin_yang);
+    // Soft inner glow (bright near center, fades toward ring boundary).
+    let inside     = max(0.0, ring_r - hex_d) / max(ring_r, 0.001);
+    let inner_glow = inside * inside * 0.28;
 
-    // Bright golden ring edge
-    let ring_color  = mix(base_color, vec3<f32>(3.0, 2.5, 0.5), ring);
+    // Six-pointed star rays: two 3-fold cosine patterns offset by 60° (1.047 rad).
+    // Strongest at center, falls off toward the ring edge.
+    let star_a = abs(cos(angle * 3.0 + t * 0.6));
+    let star_b = abs(cos(angle * 3.0 - t * 0.4 + 1.047));
+    let rays   = max(star_a, star_b) * max(0.0, 1.0 - dist * 3.5);
 
-    let alpha = clamp((ring + inner + rays) * material.intensity * (1.0 - dist * 1.5), 0.0, 1.0);
-    return vec4<f32>(ring_color, alpha);
+    // Crimson / ivory colour split driven by polar angle.
+    // The angular wave rotates slowly to give a yin-yang shimmer.
+    let hue = sin(angle - t * 0.35) * 0.5 + 0.5;
+    let col = mix(
+        vec3<f32>(0.86, 0.07, 0.24),   // crimson  (#DC1340)
+        vec3<f32>(1.00, 0.97, 0.92),   // ivory    (#FFF7EB)
+        hue
+    );
+
+    let alpha = clamp(
+        (ring * 0.95 + rays * 0.35 + inner_glow) * intens,
+        0.0, 1.0
+    );
+    return vec4<f32>(col, alpha);
 }

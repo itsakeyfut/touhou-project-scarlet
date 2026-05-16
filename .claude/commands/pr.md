@@ -101,18 +101,53 @@ Complete the implementation workflow:
    ```
 
 8. **Create PR using gh command:**
+
+   **MANDATORY: Read the template first, then fill it in.**
+
    ```bash
-   gh pr create --title "..." --body "..." --assignee itsakeyfut
+   # Step 8a — Read the project PR template
+   cat .github/PULL_REQUEST_TEMPLATE.md
+   ```
+
+   Fill in every section of the template based on the actual changes, then
+   create the PR using a HEREDOC so formatting is preserved exactly:
+
+   ```bash
+   gh pr create \
+     --title "..." \
+     --body "$(cat <<'EOF'
+   ## 概要
+
+   [このPRが何をするのか・なぜ変更するのかを1〜4文で記述]
+
+   ## 変更内容
+
+   - [変更点1]
+   - [変更点2]
+
+   ## 関連 Issue
+
+   Closes #XXX
+
+   ## テスト計画
+
+   - [ ] `cargo test --workspace` 通過
+   - [ ] `cargo clippy --workspace -- -D warnings` 通過
+   - [ ] `cargo fmt --all -- --check` 通過
+   EOF
+   )" \
+     --assignee itsakeyfut
    ```
 
 **PR Guidelines:**
 
-**MANDATORY: Write PR in Japanese (日本語で記述)**
+**MANDATORY: Write PR body in Japanese (本文は日本語で記述)**
 
 **MANDATORY PR Body Limit: MAXIMUM 100 LINES**
 
-- **Keep PR body concise** - MUST be under 100 lines
-- Follow the structure defined in `.github/PULL_REQUEST_TEMPLATE.md`
+- **Always read `.github/PULL_REQUEST_TEMPLATE.md` before writing the body**
+- Fill in all sections; do not remove any section headers
+- Keep the body concise — MUST be under 100 lines
 - Avoid verbose descriptions or redundant information
 - If more details are needed, add them as issue comments instead
 
@@ -122,32 +157,5 @@ Complete the implementation workflow:
 - Example: `feat(danmaku): BulletGlowMaterialで弾グロー発光を実装`
 - Example: `fix(collision): グレイズ判定のバグ修正`
 - Example: `docs: WGSLシェーダー設計書を追加`
-
-**PR Body Template** (from `.github/PULL_REQUEST_TEMPLATE.md`):
-```markdown
-## 概要
-
-[このPRが何をするのか・なぜ変更するのかを1〜4文で記述]
-
-## 変更内容
-
-- [変更点1]
-- [変更点2]
-- [変更点3]
-
-## 関連 Issue
-
-Closes #XXX
-
-<!-- 複数 Issue を閉じる場合は1行ずつ記述すること -->
-<!-- Closes #20 -->
-<!-- Closes #21 -->
-
-## テスト計画
-
-- [ ] `cargo test --workspace` 通過
-- [ ] `cargo clippy --workspace -- -D warnings` 通過
-- [ ] `cargo fmt --all -- --check` 通過
-```
 
 Please proceed with these steps.

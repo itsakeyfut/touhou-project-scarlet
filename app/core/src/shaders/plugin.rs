@@ -4,7 +4,7 @@ use crate::game_set::GameSystemSet;
 
 use crate::{
     components::player::{GrazeVisual, Player},
-    events::{BombUsedEvent, BossHitEvent, GrazeEvent},
+    events::{BossHitEvent, GrazeEvent},
     resources::{BombState, BOMB_DURATION_SECS},
     shaders::{
         BombMarisaMaterial, BombMarisaVisual, BombReimuMaterial, BombReimuVisual,
@@ -275,7 +275,11 @@ const PLAY_AREA_H: f32 = 448.0;
 /// below the HUD layer.
 const BOMB_VISUAL_Z: f32 = 9.0;
 
-/// Spawns a [`BombReimuVisual`] entity when a [`BombUsedEvent`] is received.
+/// Spawns a [`BombReimuVisual`] entity on the rising edge of [`BombState::active`].
+///
+/// Uses a `Local<bool>` to detect the transition from inactive → active so the
+/// entity is spawned exactly once per bomb activation, without relying on
+/// [`BombUsedEvent`] delivery timing across the double-buffered message system.
 ///
 /// The entity is a full-play-area `Mesh2d(Rectangle)` using
 /// [`BombReimuMaterial`]. Uniforms are updated each frame by
@@ -284,18 +288,21 @@ const BOMB_VISUAL_Z: f32 = 9.0;
 ///
 /// # Character selection
 ///
-/// Currently always spawns the Reimu visual because character selection is not
-/// yet implemented. The system will be updated when `SelectedCharacter` is added
-/// (TODO in the plugin registration block).
+/// Until `SelectedCharacter` is implemented, this system always spawns.
+/// TODO(character-select): gate on `SelectedCharacter == Reimu`.
 ///
 /// Registered in [`ScarletShadersPlugin`] under [`GameSystemSet::Effects`].
 pub fn spawn_bomb_reimu_visual(
     mut commands: Commands,
-    mut bomb_events: MessageReader<BombUsedEvent>,
+    bomb_state: Res<BombState>,
+    mut was_active: Local<bool>,
     mut bomb_materials: ResMut<Assets<BombReimuMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    for _ in bomb_events.read() {
+    let just_activated = bomb_state.active && !*was_active;
+    *was_active = bomb_state.active;
+
+    if just_activated {
         commands.spawn((
             BombReimuVisual,
             Mesh2d(meshes.add(Rectangle::new(PLAY_AREA_W, PLAY_AREA_H))),
@@ -305,33 +312,36 @@ pub fn spawn_bomb_reimu_visual(
     }
 }
 
-/// Spawns a [`BombMarisaVisual`] entity when a [`BombUsedEvent`] is received.
+/// Spawns a [`BombMarisaVisual`] entity on the rising edge of [`BombState::active`].
 ///
-/// The entity is a full-play-area `Mesh2d(Rectangle)` using
-/// [`BombMarisaMaterial`]. Uniforms are updated each frame by
-/// [`update_bomb_marisa_material`] and the entity is despawned by
-/// [`despawn_finished_bomb_visuals`] when the bomb expires.
+/// Uses a `Local<bool>` (same pattern as [`spawn_bomb_reimu_visual`]) to detect
+/// the inactive → active transition without relying on event delivery timing.
 ///
 /// # Character selection
 ///
-/// Currently **never** spawns because there is no character selection resource
-/// yet — the `for _ in bomb_events.read()` loop will fire once Marisa is
-/// selectable and this system is wired to the correct character.
+/// Until `SelectedCharacter` is implemented, both this system and
+/// [`spawn_bomb_reimu_visual`] fire on every bomb activation.
+/// TODO(character-select): gate on `SelectedCharacter == Marisa`.
 ///
 /// Registered in [`ScarletShadersPlugin`] under [`GameSystemSet::Effects`].
 pub fn spawn_bomb_marisa_visual(
-    mut _bomb_events: MessageReader<BombUsedEvent>,
-    _commands: Commands,
-    _bomb_materials: ResMut<Assets<BombMarisaMaterial>>,
-    _meshes: ResMut<Assets<Mesh>>,
+    mut commands: Commands,
+    bomb_state: Res<BombState>,
+    mut was_active: Local<bool>,
+    mut bomb_materials: ResMut<Assets<BombMarisaMaterial>>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    // TODO(character-select): gate on SelectedCharacter == Marisa, then spawn:
-    //   commands.spawn((
-    //       BombMarisaVisual,
-    //       Mesh2d(meshes.add(Rectangle::new(PLAY_AREA_W, PLAY_AREA_H))),
-    //       MeshMaterial2d(bomb_materials.add(BombMarisaMaterial::default())),
-    //       Transform::from_xyz(0.0, 0.0, BOMB_VISUAL_Z),
-    //   ));
+    let just_activated = bomb_state.active && !*was_active;
+    *was_active = bomb_state.active;
+
+    if just_activated {
+        commands.spawn((
+            BombMarisaVisual,
+            Mesh2d(meshes.add(Rectangle::new(PLAY_AREA_W, PLAY_AREA_H))),
+            MeshMaterial2d(bomb_materials.add(BombMarisaMaterial::default())),
+            Transform::from_xyz(0.0, 0.0, BOMB_VISUAL_Z),
+        ));
+    }
 }
 
 /// Updates [`BombReimuMaterial`] uniforms every frame while the bomb is active.
@@ -360,9 +370,9 @@ pub fn update_bomb_reimu_material(
     } else {
         (1.0 - frac) / 0.3
     };
-    // Use sqrt so the ring expands quickly at first and slows near the edges,
-    // making the barrier feel more "explosive" and ensuring early visibility.
-    let expand_radius = frac.sqrt();
+    // Start at 0.3 (already visible) and expand to 1.0 with a sqrt curve
+    // so the barrier feels explosive early and slows as it fills the area.
+    let expand_radius = 0.3 + 0.7 * frac.sqrt();
 
     for handle in &visuals {
         let Some(mat) = materials.get_mut(handle) else {

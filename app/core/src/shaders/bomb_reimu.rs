@@ -68,7 +68,9 @@ impl Default for BombReimuMaterial {
         Self {
             time: 0.0,
             intensity: 1.0,
-            expand_radius: 0.0,
+            // Start partially expanded so the ring is visible from the first
+            // rendered frame before update_bomb_reimu_material ticks.
+            expand_radius: 0.3,
             _padding: 0.0,
         }
     }

@@ -27,8 +27,10 @@ run:
     cargo run -p touhou-project-scarlet
 
 # Run game in debug mode with debug logging + hitbox/play-area visualization
+# Only logs from project crates (scarlet_core/ui/audio/assets) are shown at
+# debug level; all external crates (bevy, wgpu, naga, winit, …) are at warn.
 dev:
-    RUST_LOG=debug,wgpu=warn,wgpu_hal=warn,naga=warn cargo run -p touhou-project-scarlet --features scarlet-core/debug-hitbox
+    RUST_LOG=warn,scarlet_core=debug,scarlet_ui=debug,scarlet_audio=debug,scarlet_assets=debug,touhou_project_scarlet=debug cargo run -p touhou-project-scarlet --features scarlet-core/debug-hitbox
 
 # Run game in release mode
 release:
