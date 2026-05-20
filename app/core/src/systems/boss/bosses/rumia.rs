@@ -8,6 +8,7 @@ use crate::{
         enemy::Enemy,
     },
     events::BossSpawnEvent,
+    resources::{Difficulty, DifficultyParams},
 };
 
 // ---------------------------------------------------------------------------
@@ -137,10 +138,77 @@ pub fn rumia_phases() -> Vec<BossPhaseData> {
 }
 
 // ---------------------------------------------------------------------------
+// Difficulty scaling helpers
+// ---------------------------------------------------------------------------
+
+/// Returns Rumia's phase list scaled to the given difficulty.
+///
+/// Applies [`DifficultyParams`] multipliers to HP, time limits, and bullet
+/// speeds. The Normal baseline (`rumia_phases()`) is always the source, so
+/// round-trips through this function are idempotent.
+pub fn rumia_phases_for_difficulty(difficulty: Difficulty) -> Vec<BossPhaseData> {
+    let params = DifficultyParams::for_difficulty(difficulty);
+    scale_phases(rumia_phases(), &params)
+}
+
+/// Applies `params` multipliers to every phase in `phases`.
+fn scale_phases(phases: Vec<BossPhaseData>, params: &DifficultyParams) -> Vec<BossPhaseData> {
+    phases
+        .into_iter()
+        .map(|mut p| {
+            p.hp = (p.hp * params.boss_hp_multiplier).ceil();
+            p.hp_max = p.hp;
+            p.time_limit_secs *= params.boss_time_multiplier;
+            p.pattern = scale_pattern_speed(p.pattern, params.bullet_speed_multiplier);
+            p
+        })
+        .collect()
+}
+
+/// Multiplies the bullet speed component inside a [`BulletPattern`] by `mult`.
+fn scale_pattern_speed(pattern: BulletPattern, mult: f32) -> BulletPattern {
+    match pattern {
+        BulletPattern::Aimed {
+            count,
+            spread_deg,
+            speed,
+        } => BulletPattern::Aimed {
+            count,
+            spread_deg,
+            speed: speed * mult,
+        },
+        BulletPattern::Ring { count, speed } => BulletPattern::Ring {
+            count,
+            speed: speed * mult,
+        },
+        BulletPattern::Spread {
+            count,
+            spread_deg,
+            speed,
+            angle_offset,
+        } => BulletPattern::Spread {
+            count,
+            spread_deg,
+            speed: speed * mult,
+            angle_offset,
+        },
+        BulletPattern::Spiral {
+            arms,
+            speed,
+            rotation_speed_deg,
+        } => BulletPattern::Spiral {
+            arms,
+            speed: speed * mult,
+            rotation_speed_deg,
+        },
+    }
+}
+
+// ---------------------------------------------------------------------------
 // spawn_rumia  (consumed by on_boss_spawn_stage1)
 // ---------------------------------------------------------------------------
 
-/// Spawns the Rumia boss entity using the phase data from [`rumia_phases`].
+/// Spawns the Rumia boss entity with phases scaled to `difficulty`.
 ///
 /// Called by [`on_boss_spawn_stage1`] when a [`BossSpawnEvent`] arrives for
 /// stage 1. The entity receives:
@@ -155,8 +223,8 @@ pub fn rumia_phases() -> Vec<BossPhaseData> {
 ///
 /// Visual representation is a placeholder coloured sprite until Phase 19
 /// replaces it with the proper sprite sheet.
-pub fn spawn_rumia(commands: &mut Commands) {
-    let phases = rumia_phases();
+pub fn spawn_rumia(commands: &mut Commands, difficulty: Difficulty) {
+    let phases = rumia_phases_for_difficulty(difficulty);
     let first = &phases[0];
     let first_hp = first.hp;
     let first_pattern = first.pattern.clone();
@@ -196,23 +264,18 @@ pub fn spawn_rumia(commands: &mut Commands) {
 
 /// System that reacts to [`BossSpawnEvent`] and spawns Rumia for stage 1.
 ///
-/// Registered in [`crate::GameSystemSet::StageControl`] (alongside the stage
-/// control system that emits the event) so the boss appears in the same frame
-/// the event fires.
-///
-/// # Ordering
-///
-/// Runs in `StageControl` immediately after `stage_control_system` emits the
-/// event, using the fact that both are chained in the same system set.
+/// Reads the current [`Difficulty`] resource to select appropriately scaled
+/// boss phases. Registered in [`crate::GameSystemSet::StageControl`].
 pub fn on_boss_spawn_stage1(
     mut commands: Commands,
     mut boss_events: MessageReader<BossSpawnEvent>,
+    difficulty: Res<Difficulty>,
 ) {
     for event in boss_events.read() {
         if event.stage_number != 1 {
             continue;
         }
-        spawn_rumia(&mut commands);
+        spawn_rumia(&mut commands, *difficulty);
     }
 }
 
@@ -363,6 +426,89 @@ mod tests {
             assert!(
                 window[1].spell_card_bonus >= window[0].spell_card_bonus,
                 "later spell cards must award at least as many points as earlier ones"
+            );
+        }
+    }
+
+    // ---- difficulty scaling tests ------------------------------------------
+
+    /// Scaled phases must preserve the same count as the Normal baseline.
+    #[test]
+    fn scaled_phases_preserve_count() {
+        for d in [
+            Difficulty::Easy,
+            Difficulty::Normal,
+            Difficulty::Hard,
+            Difficulty::Lunatic,
+        ] {
+            let phases = rumia_phases_for_difficulty(d);
+            assert_eq!(phases.len(), 3, "{} must still have 3 phases", d.label());
+        }
+    }
+
+    /// Hard phases must have higher HP than Normal.
+    #[test]
+    fn hard_has_more_hp_than_normal() {
+        let normal = rumia_phases_for_difficulty(Difficulty::Normal);
+        let hard = rumia_phases_for_difficulty(Difficulty::Hard);
+        for i in 0..normal.len() {
+            assert!(
+                hard[i].hp > normal[i].hp,
+                "Hard phase {i} HP ({}) must exceed Normal ({})",
+                hard[i].hp,
+                normal[i].hp
+            );
+        }
+    }
+
+    /// Easy phases must have less HP than Normal.
+    #[test]
+    fn easy_has_less_hp_than_normal() {
+        let normal = rumia_phases_for_difficulty(Difficulty::Normal);
+        let easy = rumia_phases_for_difficulty(Difficulty::Easy);
+        for i in 0..normal.len() {
+            assert!(
+                easy[i].hp < normal[i].hp,
+                "Easy phase {i} HP ({}) must be below Normal ({})",
+                easy[i].hp,
+                normal[i].hp
+            );
+        }
+    }
+
+    /// All scaled difficulties must keep hp == hp_max.
+    #[test]
+    fn scaled_hp_equals_hp_max() {
+        for d in [
+            Difficulty::Easy,
+            Difficulty::Normal,
+            Difficulty::Hard,
+            Difficulty::Lunatic,
+        ] {
+            for (i, p) in rumia_phases_for_difficulty(d).iter().enumerate() {
+                assert_eq!(
+                    p.hp,
+                    p.hp_max,
+                    "{} phase {i}: hp ({}) != hp_max ({})",
+                    d.label(),
+                    p.hp,
+                    p.hp_max
+                );
+            }
+        }
+    }
+
+    /// Lunatic boss phases must have shorter time limits than Normal.
+    #[test]
+    fn lunatic_has_shorter_time_limits() {
+        let normal = rumia_phases_for_difficulty(Difficulty::Normal);
+        let lunatic = rumia_phases_for_difficulty(Difficulty::Lunatic);
+        for i in 0..normal.len() {
+            assert!(
+                lunatic[i].time_limit_secs < normal[i].time_limit_secs,
+                "Lunatic phase {i} time ({}) must be shorter than Normal ({})",
+                lunatic[i].time_limit_secs,
+                normal[i].time_limit_secs
             );
         }
     }

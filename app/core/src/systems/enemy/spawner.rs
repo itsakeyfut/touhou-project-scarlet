@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use crate::{
     components::{GameSessionEntity, bullet::BulletPattern, enemy::Enemy},
     config::FodderEnemyConfigParams,
-    resources::{EnemySpawner, SpawnEntry, StageData},
+    resources::{Difficulty, DifficultyParams, EnemySpawner, SpawnEntry, StageData},
     systems::danmaku::emitter::SpiralState,
 };
 
@@ -37,28 +37,43 @@ use crate::{
 /// when registering them (see [`crate::ScarletCorePlugin`]).
 ///
 /// Registered in [`crate::GameSystemSet::StageControl`].
+/// Spawns enemies from the [`EnemySpawner`] script when their scheduled time arrives.
+///
+/// Enemy HP is scaled by [`DifficultyParams::enemy_hp_multiplier`] for the
+/// current [`Difficulty`] resource, so higher difficulties produce tougher
+/// fodder enemies without requiring separate RON config files per difficulty.
 pub fn enemy_spawner_system(
     mut commands: Commands,
     mut spawner: ResMut<EnemySpawner>,
     stage_data: Res<StageData>,
     fodder_cfg: FodderEnemyConfigParams,
+    difficulty: Res<Difficulty>,
 ) {
     let elapsed = stage_data.elapsed_time;
+    let hp_mult = DifficultyParams::for_difficulty(*difficulty).enemy_hp_multiplier;
 
     while let Some(entry) = spawner.script.get(spawner.index) {
         if entry.time > elapsed {
             break;
         }
 
-        spawn_enemy(&mut commands, entry, &fodder_cfg);
+        spawn_enemy(&mut commands, entry, &fodder_cfg, hp_mult);
         spawner.index += 1;
     }
 }
 
 /// Spawns a single enemy entity from a [`SpawnEntry`].
-fn spawn_enemy(commands: &mut Commands, entry: &SpawnEntry, fodder_cfg: &FodderEnemyConfigParams) {
+///
+/// `hp_multiplier` scales the base HP from config — pass
+/// `DifficultyParams::for_difficulty(d).enemy_hp_multiplier` for the current run.
+fn spawn_enemy(
+    commands: &mut Commands,
+    entry: &SpawnEntry,
+    fodder_cfg: &FodderEnemyConfigParams,
+    hp_multiplier: f32,
+) {
     let kind = entry.kind;
-    let hp = fodder_cfg.hp_for(kind);
+    let hp = (fodder_cfg.hp_for(kind) * hp_multiplier).ceil();
     let radius = fodder_cfg.radius_for(kind);
     let score = fodder_cfg.score_for(kind);
 

@@ -10,13 +10,13 @@ use crate::{
 };
 
 // ---------------------------------------------------------------------------
-// Spawn helpers
+// Spawn-position constants
 // ---------------------------------------------------------------------------
 
-/// Extra margin above the top edge before spawning (px).
+/// Extra vertical margin above the top edge before spawning (px).
 const TOP_MARGIN: f32 = 66.0;
 
-/// Extra margin beyond each side edge before spawning (px).
+/// Extra horizontal margin beyond each side edge before spawning (px).
 const SIDE_MARGIN: f32 = 38.0;
 
 /// Spawn Y just above the visible play area.
@@ -28,7 +28,11 @@ const LEFT: f32 = -(PLAY_AREA_HALF_W + SIDE_MARGIN);
 /// Spawn X beyond the right edge of the play area.
 const RIGHT: f32 = PLAY_AREA_HALF_W + SIDE_MARGIN;
 
-/// Creates an [`BulletEmitter`] for a typical normal fairy (aimed spread, slow fire rate).
+// ---------------------------------------------------------------------------
+// Emitter helpers
+// ---------------------------------------------------------------------------
+
+/// Standard aimed-spread emitter for a normal fairy (3-way, 20°, 110 px/s).
 fn fairy_emitter() -> BulletEmitter {
     BulletEmitter {
         pattern: BulletPattern::Aimed {
@@ -42,7 +46,7 @@ fn fairy_emitter() -> BulletEmitter {
     }
 }
 
-/// Creates an [`BulletEmitter`] for a ring-pattern enemy (TallFairy / stop-and-shoot).
+/// Ring-burst emitter used by stop-and-shoot enemies (TallFairy etc.).
 fn ring_emitter(count: u8, speed: f32, interval_secs: f32) -> BulletEmitter {
     BulletEmitter {
         pattern: BulletPattern::Ring { count, speed },
@@ -50,6 +54,168 @@ fn ring_emitter(count: u8, speed: f32, interval_secs: f32) -> BulletEmitter {
         timer: Timer::from_seconds(interval_secs, TimerMode::Repeating),
         active: true,
     }
+}
+
+// ---------------------------------------------------------------------------
+// SpawnEntry helpers
+// ---------------------------------------------------------------------------
+
+/// Base factory: creates a [`SpawnEntry`] from its raw components.
+fn entry(
+    time: f32,
+    kind: EnemyKind,
+    pos: Vec2,
+    movement: EnemyMovement,
+    emitter: Option<BulletEmitter>,
+) -> SpawnEntry {
+    SpawnEntry {
+        time,
+        kind,
+        position: pos,
+        movement,
+        emitter,
+    }
+}
+
+/// A fairy that falls straight down from `(x, TOP)`.
+fn fall_fairy(time: f32, x: f32) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Fairy,
+        Vec2::new(x, TOP),
+        EnemyMovement::FallDown { speed: 80.0 },
+        Some(fairy_emitter()),
+    )
+}
+
+/// A fairy entering from the left or right side at `(from_x, y)` with
+/// velocity `(vx, vy)`.
+fn side_fairy(time: f32, from_x: f32, y: f32, vx: f32, vy: f32) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Fairy,
+        Vec2::new(from_x, y),
+        EnemyMovement::Linear {
+            velocity: Vec2::new(vx, vy),
+        },
+        Some(fairy_emitter()),
+    )
+}
+
+/// A bat entering from `(from_x, y)` horizontally with speed `vx`.
+/// Slight downward drift of -30 px/s is applied to all bats.
+fn bat_horizontal(time: f32, from_x: f32, y: f32, vx: f32) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Bat,
+        Vec2::new(from_x, y),
+        EnemyMovement::Linear {
+            velocity: Vec2::new(vx, -30.0),
+        },
+        None,
+    )
+}
+
+/// A bat falling straight down from `(x, TOP)`.
+fn bat_fall(time: f32, x: f32) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Bat,
+        Vec2::new(x, TOP),
+        EnemyMovement::FallDown { speed: 130.0 },
+        None,
+    )
+}
+
+/// A fairy that descends from `(x, TOP)`, stops after `stop_after` seconds,
+/// then fires a ring burst (`count` bullets at `speed` px/s every `interval` s).
+fn stop_ring_fairy(
+    time: f32,
+    x: f32,
+    stop_after: f32,
+    count: u8,
+    speed: f32,
+    interval: f32,
+) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Fairy,
+        Vec2::new(x, TOP),
+        EnemyMovement::LinearThenStop {
+            velocity: Vec2::new(0.0, -110.0),
+            stop_after,
+        },
+        Some(ring_emitter(count, speed, interval)),
+    )
+}
+
+/// A fairy that moves in a sine wave downward from `(x, TOP)`.
+///
+/// `base_vx` adds a horizontal drift component (0.0 for straight-down waves).
+fn sine_fairy(time: f32, x: f32, base_vx: f32) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Fairy,
+        Vec2::new(x, TOP),
+        EnemyMovement::SineWave {
+            base_velocity: Vec2::new(base_vx, -70.0),
+            amplitude: 80.0,
+            frequency: 0.5,
+        },
+        Some(fairy_emitter()),
+    )
+}
+
+/// A fairy that moves in a faster sine wave downward from `(x, TOP)`.
+///
+/// Used in the second zigzag wave where fairies move noticeably quicker.
+fn fast_sine_fairy(time: f32, x: f32, base_vx: f32) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Fairy,
+        Vec2::new(x, TOP),
+        EnemyMovement::SineWave {
+            base_velocity: Vec2::new(base_vx, -80.0),
+            amplitude: 60.0,
+            frequency: 0.8,
+        },
+        Some(fairy_emitter()),
+    )
+}
+
+/// A fairy that chases the player from `(x, TOP)` at 60 px/s.
+fn chase_fairy(time: f32, x: f32) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::Fairy,
+        Vec2::new(x, TOP),
+        EnemyMovement::ChasePlayer { speed: 60.0 },
+        Some(fairy_emitter()),
+    )
+}
+
+/// A TallFairy that descends from `(x, TOP)` with an initial velocity of
+/// `(vx, -100 px/s)`, stops after `stop_after` seconds, then fires a ring
+/// burst (`count` bullets at `speed` px/s every `interval` s).
+fn tall_fairy_stop(
+    time: f32,
+    x: f32,
+    vx: f32,
+    stop_after: f32,
+    count: u8,
+    speed: f32,
+    interval: f32,
+) -> SpawnEntry {
+    entry(
+        time,
+        EnemyKind::TallFairy,
+        Vec2::new(x, TOP),
+        EnemyMovement::LinearThenStop {
+            velocity: Vec2::new(vx, -100.0),
+            stop_after,
+        },
+        Some(ring_emitter(count, speed, interval)),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -85,590 +251,209 @@ fn ring_emitter(count: u8, speed: f32, interval_secs: f32) -> BulletEmitter {
 /// [`crate::systems::stage::stage_control_system`] emits
 /// [`crate::events::BossSpawnEvent`].
 pub fn stage1_script() -> Vec<SpawnEntry> {
+    [
+        wave1_opening(),
+        wave2_flanks(),
+        wave3_bat_rush_left(),
+        wave4_bat_rush_right(),
+        wave5_stop_ring_fairies(),
+        wave6_zigzag(),
+        wave7_tall_fairy_escort(),
+        wave8_bat_curtain(),
+        wave9_side_fairies(),
+        wave10_fast_zigzag(),
+        wave11_twin_tall_fairies(),
+        wave12_homing(),
+        wave13_density_surge(),
+        wave14_final_wave(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect()
+}
+
+// ----------------------------------------------------------------
+// Wave 1: Opening — 3 fairies falling from the top (t = 3 – 5 s)
+// ----------------------------------------------------------------
+fn wave1_opening() -> Vec<SpawnEntry> {
     vec![
-        // ----------------------------------------------------------------
-        // Wave 1: Opening — 3 fairies falling from the top (t = 3 – 5 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 3.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-60.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 80.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 3.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(0.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 80.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 4.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(60.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 80.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        // ----------------------------------------------------------------
-        // Wave 2: Flanks — fairies entering from left and right (t = 7 – 9 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 7.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(LEFT, 100.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(90.0, -50.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 7.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(LEFT, 60.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(90.0, -50.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 8.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(RIGHT, 100.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-90.0, -50.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 8.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(RIGHT, 60.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-90.0, -50.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        // ----------------------------------------------------------------
-        // Wave 3: Bat rush from the left (t = 12 – 14 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 12.0,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 120.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 12.4,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 90.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 12.8,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 60.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 13.2,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 30.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 13.6,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 0.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(160.0, -30.0),
-            },
-            emitter: None,
-        },
-        // ----------------------------------------------------------------
-        // Wave 4: Bat rush from the right (t = 16 – 18 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 16.0,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 120.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 16.4,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 90.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 16.8,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 60.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 17.2,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 30.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-160.0, -30.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 17.6,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 0.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-160.0, -30.0),
-            },
-            emitter: None,
-        },
-        // ----------------------------------------------------------------
-        // Wave 5: Stop-and-shoot fairies (t = 22 – 24 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 22.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-120.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(0.0, -110.0),
-                stop_after: 1.8,
-            },
-            emitter: Some(ring_emitter(6, 110.0, 2.0)),
-        },
-        SpawnEntry {
-            time: 22.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(0.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(0.0, -110.0),
-                stop_after: 1.8,
-            },
-            emitter: Some(ring_emitter(6, 110.0, 2.0)),
-        },
-        SpawnEntry {
-            time: 23.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(120.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(0.0, -110.0),
-                stop_after: 1.8,
-            },
-            emitter: Some(ring_emitter(6, 110.0, 2.0)),
-        },
-        // ----------------------------------------------------------------
-        // Wave 6: Sine-wave fairies (t = 28 – 31 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 28.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-100.0, TOP),
-            movement: EnemyMovement::SineWave {
-                base_velocity: Vec2::new(0.0, -70.0),
-                amplitude: 80.0,
-                frequency: 0.5,
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 29.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(0.0, TOP),
-            movement: EnemyMovement::SineWave {
-                base_velocity: Vec2::new(0.0, -70.0),
-                amplitude: 80.0,
-                frequency: 0.5,
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 30.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(100.0, TOP),
-            movement: EnemyMovement::SineWave {
-                base_velocity: Vec2::new(0.0, -70.0),
-                amplitude: 80.0,
-                frequency: 0.5,
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        // ----------------------------------------------------------------
-        // Wave 7: First TallFairy with escort (t = 35 – 38 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 35.0,
-            kind: EnemyKind::TallFairy,
-            position: Vec2::new(0.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(0.0, -90.0),
-                stop_after: 2.2,
-            },
-            emitter: Some(ring_emitter(8, 120.0, 2.5)),
-        },
-        SpawnEntry {
-            time: 36.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-100.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 90.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 36.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(100.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 90.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        // ----------------------------------------------------------------
-        // Wave 8: Bat curtain from above (t = 44 – 46 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 44.0,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(-150.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 130.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 44.3,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(-90.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 130.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 44.6,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(-30.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 130.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 44.9,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(30.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 130.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 45.2,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(90.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 130.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 45.5,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(150.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 130.0 },
-            emitter: None,
-        },
-        // ----------------------------------------------------------------
-        // Wave 9: Fairies from sides (t = 52 – 55 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 52.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(LEFT, 130.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(80.0, -60.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 52.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(LEFT, 80.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(80.0, -60.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 53.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(RIGHT, 130.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-80.0, -60.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 53.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(RIGHT, 80.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-80.0, -60.0),
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        // ----------------------------------------------------------------
-        // Wave 10: Faster sine-wave fairies (t = 60 – 63 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 60.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-120.0, TOP),
-            movement: EnemyMovement::SineWave {
-                base_velocity: Vec2::new(30.0, -80.0),
-                amplitude: 60.0,
-                frequency: 0.8,
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 60.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-40.0, TOP),
-            movement: EnemyMovement::SineWave {
-                base_velocity: Vec2::new(0.0, -80.0),
-                amplitude: 60.0,
-                frequency: 0.8,
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 61.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(40.0, TOP),
-            movement: EnemyMovement::SineWave {
-                base_velocity: Vec2::new(0.0, -80.0),
-                amplitude: 60.0,
-                frequency: 0.8,
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 61.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(120.0, TOP),
-            movement: EnemyMovement::SineWave {
-                base_velocity: Vec2::new(-30.0, -80.0),
-                amplitude: 60.0,
-                frequency: 0.8,
-            },
-            emitter: Some(fairy_emitter()),
-        },
-        // ----------------------------------------------------------------
-        // Wave 11: Two TallFairies with bat escorts (t = 68 – 70 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 68.0,
-            kind: EnemyKind::TallFairy,
-            position: Vec2::new(-80.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(30.0, -95.0),
-                stop_after: 2.0,
-            },
-            emitter: Some(ring_emitter(8, 120.0, 2.5)),
-        },
-        SpawnEntry {
-            time: 68.5,
-            kind: EnemyKind::TallFairy,
-            position: Vec2::new(80.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(-30.0, -95.0),
-                stop_after: 2.0,
-            },
-            emitter: Some(ring_emitter(8, 120.0, 2.5)),
-        },
-        SpawnEntry {
-            time: 69.0,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 80.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(140.0, -20.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 69.3,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 80.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-140.0, -20.0),
-            },
-            emitter: None,
-        },
-        // ----------------------------------------------------------------
-        // Wave 12: Homing fairies (t = 77 – 80 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 77.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-150.0, TOP),
-            movement: EnemyMovement::ChasePlayer { speed: 60.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 78.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(0.0, TOP),
-            movement: EnemyMovement::ChasePlayer { speed: 60.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 79.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(150.0, TOP),
-            movement: EnemyMovement::ChasePlayer { speed: 60.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        // ----------------------------------------------------------------
-        // Wave 13: Density surge (t = 85 – 89 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 85.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-160.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 85.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 85.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(-80.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 85.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 86.0,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(80.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 85.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 86.5,
-            kind: EnemyKind::Fairy,
-            position: Vec2::new(160.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 85.0 },
-            emitter: Some(fairy_emitter()),
-        },
-        SpawnEntry {
-            time: 87.0,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 140.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(170.0, -50.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 87.3,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(LEFT, 100.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(170.0, -50.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 87.6,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 140.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-170.0, -50.0),
-            },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 87.9,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(RIGHT, 100.0),
-            movement: EnemyMovement::Linear {
-                velocity: Vec2::new(-170.0, -50.0),
-            },
-            emitter: None,
-        },
-        // ----------------------------------------------------------------
-        // Wave 14: Final wave — TallFairies + closing bats (t = 93 – 97 s)
-        // ----------------------------------------------------------------
-        SpawnEntry {
-            time: 93.0,
-            kind: EnemyKind::TallFairy,
-            position: Vec2::new(-140.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(50.0, -100.0),
-                stop_after: 2.0,
-            },
-            emitter: Some(ring_emitter(10, 130.0, 2.0)),
-        },
-        SpawnEntry {
-            time: 93.5,
-            kind: EnemyKind::TallFairy,
-            position: Vec2::new(0.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(0.0, -100.0),
-                stop_after: 2.0,
-            },
-            emitter: Some(ring_emitter(10, 130.0, 2.0)),
-        },
-        SpawnEntry {
-            time: 94.0,
-            kind: EnemyKind::TallFairy,
-            position: Vec2::new(140.0, TOP),
-            movement: EnemyMovement::LinearThenStop {
-                velocity: Vec2::new(-50.0, -100.0),
-                stop_after: 2.0,
-            },
-            emitter: Some(ring_emitter(10, 130.0, 2.0)),
-        },
-        SpawnEntry {
-            time: 95.0,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(-180.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 150.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 95.3,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(-90.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 150.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 95.6,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(90.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 150.0 },
-            emitter: None,
-        },
-        SpawnEntry {
-            time: 95.9,
-            kind: EnemyKind::Bat,
-            position: Vec2::new(180.0, TOP),
-            movement: EnemyMovement::FallDown { speed: 150.0 },
-            emitter: None,
-        },
-        // No entries after t = 100 s.
-        // Once all enemies are cleared the stage_control_system emits BossSpawnEvent.
+        fall_fairy(3.0, -60.0),
+        fall_fairy(3.5, 0.0),
+        fall_fairy(4.0, 60.0),
     ]
 }
+
+// ----------------------------------------------------------------
+// Wave 2: Flanks — fairies entering from left and right (t = 7 – 9 s)
+// ----------------------------------------------------------------
+fn wave2_flanks() -> Vec<SpawnEntry> {
+    vec![
+        side_fairy(7.0, LEFT, 100.0, 90.0, -50.0),
+        side_fairy(7.5, LEFT, 60.0, 90.0, -50.0),
+        side_fairy(8.0, RIGHT, 100.0, -90.0, -50.0),
+        side_fairy(8.5, RIGHT, 60.0, -90.0, -50.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 3: Bat rush from the left (t = 12 – 14 s)
+// ----------------------------------------------------------------
+fn wave3_bat_rush_left() -> Vec<SpawnEntry> {
+    vec![
+        bat_horizontal(12.0, LEFT, 120.0, 160.0),
+        bat_horizontal(12.4, LEFT, 90.0, 160.0),
+        bat_horizontal(12.8, LEFT, 60.0, 160.0),
+        bat_horizontal(13.2, LEFT, 30.0, 160.0),
+        bat_horizontal(13.6, LEFT, 0.0, 160.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 4: Bat rush from the right (t = 16 – 18 s)
+// ----------------------------------------------------------------
+fn wave4_bat_rush_right() -> Vec<SpawnEntry> {
+    vec![
+        bat_horizontal(16.0, RIGHT, 120.0, -160.0),
+        bat_horizontal(16.4, RIGHT, 90.0, -160.0),
+        bat_horizontal(16.8, RIGHT, 60.0, -160.0),
+        bat_horizontal(17.2, RIGHT, 30.0, -160.0),
+        bat_horizontal(17.6, RIGHT, 0.0, -160.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 5: Stop-and-shoot fairies (t = 22 – 24 s)
+// ----------------------------------------------------------------
+fn wave5_stop_ring_fairies() -> Vec<SpawnEntry> {
+    vec![
+        stop_ring_fairy(22.0, -120.0, 1.8, 6, 110.0, 2.0),
+        stop_ring_fairy(22.5, 0.0, 1.8, 6, 110.0, 2.0),
+        stop_ring_fairy(23.0, 120.0, 1.8, 6, 110.0, 2.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 6: Sine-wave fairies (t = 28 – 31 s)
+// ----------------------------------------------------------------
+fn wave6_zigzag() -> Vec<SpawnEntry> {
+    vec![
+        sine_fairy(28.0, -100.0, 0.0),
+        sine_fairy(29.0, 0.0, 0.0),
+        sine_fairy(30.0, 100.0, 0.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 7: First TallFairy with escort fairies (t = 35 – 38 s)
+// ----------------------------------------------------------------
+fn wave7_tall_fairy_escort() -> Vec<SpawnEntry> {
+    vec![
+        tall_fairy_stop(35.0, 0.0, 0.0, 2.2, 8, 120.0, 2.5),
+        fall_fairy(36.0, -100.0),
+        // Right escort — slightly faster fall speed, so use entry() directly.
+        entry(
+            36.5,
+            EnemyKind::Fairy,
+            Vec2::new(100.0, TOP),
+            EnemyMovement::FallDown { speed: 90.0 },
+            Some(fairy_emitter()),
+        ),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 8: Bat curtain from above (t = 44 – 46 s)
+// ----------------------------------------------------------------
+fn wave8_bat_curtain() -> Vec<SpawnEntry> {
+    vec![
+        bat_fall(44.0, -150.0),
+        bat_fall(44.3, -90.0),
+        bat_fall(44.6, -30.0),
+        bat_fall(44.9, 30.0),
+        bat_fall(45.2, 90.0),
+        bat_fall(45.5, 150.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 9: Fairies from the sides (t = 52 – 55 s)
+// ----------------------------------------------------------------
+fn wave9_side_fairies() -> Vec<SpawnEntry> {
+    vec![
+        side_fairy(52.0, LEFT, 130.0, 80.0, -60.0),
+        side_fairy(52.5, LEFT, 80.0, 80.0, -60.0),
+        side_fairy(53.0, RIGHT, 130.0, -80.0, -60.0),
+        side_fairy(53.5, RIGHT, 80.0, -80.0, -60.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 10: Faster sine-wave fairies (t = 60 – 63 s)
+// ----------------------------------------------------------------
+fn wave10_fast_zigzag() -> Vec<SpawnEntry> {
+    vec![
+        fast_sine_fairy(60.0, -120.0, 30.0),
+        fast_sine_fairy(60.5, -40.0, 0.0),
+        fast_sine_fairy(61.0, 40.0, 0.0),
+        fast_sine_fairy(61.5, 120.0, -30.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 11: Two TallFairies with bat escorts (t = 68 – 70 s)
+// ----------------------------------------------------------------
+fn wave11_twin_tall_fairies() -> Vec<SpawnEntry> {
+    vec![
+        tall_fairy_stop(68.0, -80.0, 30.0, 2.0, 8, 120.0, 2.5),
+        tall_fairy_stop(68.5, 80.0, -30.0, 2.0, 8, 120.0, 2.5),
+        bat_horizontal(69.0, LEFT, 80.0, 140.0),
+        bat_horizontal(69.3, RIGHT, 80.0, -140.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 12: Homing fairies (t = 77 – 80 s)
+// ----------------------------------------------------------------
+fn wave12_homing() -> Vec<SpawnEntry> {
+    vec![
+        chase_fairy(77.0, -150.0),
+        chase_fairy(78.0, 0.0),
+        chase_fairy(79.0, 150.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 13: Density surge — fairies + bats (t = 85 – 89 s)
+// ----------------------------------------------------------------
+fn wave13_density_surge() -> Vec<SpawnEntry> {
+    vec![
+        fall_fairy(85.0, -160.0),
+        fall_fairy(85.5, -80.0),
+        fall_fairy(86.0, 80.0),
+        fall_fairy(86.5, 160.0),
+        bat_horizontal(87.0, LEFT, 140.0, 170.0),
+        bat_horizontal(87.3, LEFT, 100.0, 170.0),
+        bat_horizontal(87.6, RIGHT, 140.0, -170.0),
+        bat_horizontal(87.9, RIGHT, 100.0, -170.0),
+    ]
+}
+
+// ----------------------------------------------------------------
+// Wave 14: Final wave — TallFairies + closing bats (t = 93 – 97 s)
+// ----------------------------------------------------------------
+fn wave14_final_wave() -> Vec<SpawnEntry> {
+    vec![
+        tall_fairy_stop(93.0, -140.0, 50.0, 2.0, 10, 130.0, 2.0),
+        tall_fairy_stop(93.5, 0.0, 0.0, 2.0, 10, 130.0, 2.0),
+        tall_fairy_stop(94.0, 140.0, -50.0, 2.0, 10, 130.0, 2.0),
+        bat_fall(95.0, -180.0),
+        bat_fall(95.3, -90.0),
+        bat_fall(95.6, 90.0),
+        bat_fall(95.9, 180.0),
+    ]
+}
+// No entries after t = 100 s.
+// Once all enemies are cleared, stage_control_system emits BossSpawnEvent.
 
 // ---------------------------------------------------------------------------
 // Stage loader system
@@ -676,10 +461,9 @@ pub fn stage1_script() -> Vec<SpawnEntry> {
 
 /// Loads the Stage 1 script into [`EnemySpawner`] when gameplay starts.
 ///
-/// Registered as an [`OnEnter`](`bevy::prelude::OnEnter`)(`AppState::Playing`)
-/// system. Resets both the spawner and [`StageData`] so that returning to the
-/// title screen and restarting replays the full script from time zero without
-/// fast-forwarding or skipping boss logic.
+/// Registered as [`OnEnter`](`bevy::prelude::OnEnter`)(`AppState::Playing`).
+/// Resets the spawner and [`StageData`] so that restarting replays the full
+/// script from time zero without fast-forwarding or skipping boss logic.
 pub fn load_stage1_system(mut spawner: ResMut<EnemySpawner>, mut stage_data: ResMut<StageData>) {
     spawner.script = stage1_script();
     spawner.index = 0;
@@ -746,8 +530,7 @@ mod tests {
         assert!(script.iter().any(|e| e.kind == EnemyKind::TallFairy));
     }
 
-    /// There must be at least one entry using a non-trivial movement pattern
-    /// (i.e. not only FallDown).
+    /// There must be at least one entry using a non-trivial movement pattern.
     #[test]
     fn script_uses_varied_movement_patterns() {
         let script = stage1_script();
@@ -762,5 +545,41 @@ mod tests {
             has_chase,
             "script must include at least one ChasePlayer entry"
         );
+    }
+
+    /// Helper: fall_fairy must produce a FallDown fairy at the correct x.
+    #[test]
+    fn fall_fairy_helper_is_correct() {
+        let e = fall_fairy(5.0, 42.0);
+        assert_eq!(e.time, 5.0);
+        assert_eq!(e.kind, EnemyKind::Fairy);
+        assert_eq!(e.position.x, 42.0);
+        assert_eq!(e.position.y, TOP);
+        assert!(matches!(e.movement, EnemyMovement::FallDown { .. }));
+        assert!(e.emitter.is_some());
+    }
+
+    /// Helper: bat_horizontal must produce a bat with correct velocity sign.
+    #[test]
+    fn bat_horizontal_helper_direction() {
+        let left = bat_horizontal(1.0, LEFT, 50.0, 160.0);
+        let right = bat_horizontal(1.0, RIGHT, 50.0, -160.0);
+        match left.movement {
+            EnemyMovement::Linear { velocity } => assert!(velocity.x > 0.0),
+            _ => panic!("expected Linear movement"),
+        }
+        match right.movement {
+            EnemyMovement::Linear { velocity } => assert!(velocity.x < 0.0),
+            _ => panic!("expected Linear movement"),
+        }
+    }
+
+    /// Helper: tall_fairy_stop must produce a TallFairy with a ring emitter.
+    #[test]
+    fn tall_fairy_stop_helper_has_ring_emitter() {
+        let e = tall_fairy_stop(10.0, 0.0, 0.0, 2.0, 8, 120.0, 2.5);
+        assert_eq!(e.kind, EnemyKind::TallFairy);
+        let emitter = e.emitter.expect("TallFairy must have an emitter");
+        assert!(matches!(emitter.pattern, BulletPattern::Ring { .. }));
     }
 }

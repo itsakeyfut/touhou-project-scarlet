@@ -35,8 +35,8 @@ pub use events::{
 pub use game_set::GameSystemSet;
 pub use resources::{
     BOMB_DURATION_SECS, BOMB_EXTEND_FRAGMENTS, BOMB_INVINCIBLE_SECS, BombState,
-    COUNTER_BOMB_WINDOW_SECS, EnemySpawner, FragmentTracker, GameData, LIFE_EXTEND_FRAGMENTS,
-    SpawnEntry, StageData,
+    COUNTER_BOMB_WINDOW_SECS, Difficulty, DifficultyParams, EnemySpawner, FragmentTracker,
+    GameData, LIFE_EXTEND_FRAGMENTS, SpawnEntry, StageData,
 };
 pub use shaders::{
     BombMarisaMaterial, BombMarisaVisual, BombReimuMaterial, BombReimuVisual, GrazeMaterial,
@@ -79,6 +79,9 @@ impl Plugin for ScarletCorePlugin {
         app.insert_resource(StageData::default());
         app.insert_resource(EnemySpawner::default());
         app.insert_resource(BombState::default());
+        // Difficulty defaults to Normal; the future DifficultySelect screen will
+        // overwrite this before transitioning to Playing.
+        app.init_resource::<Difficulty>();
 
         // System set ordering — all sets run only while Playing.
         app.configure_sets(
