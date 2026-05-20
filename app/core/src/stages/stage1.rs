@@ -6,7 +6,7 @@ use crate::{
         enemy::{EnemyKind, EnemyMovement},
     },
     constants::{PLAY_AREA_HALF_H, PLAY_AREA_HALF_W},
-    resources::{EnemySpawner, SpawnEntry, StageData},
+    resources::SpawnEntry,
 };
 
 // ---------------------------------------------------------------------------
@@ -457,21 +457,6 @@ fn wave14_final_wave() -> Vec<SpawnEntry> {
 
 // ---------------------------------------------------------------------------
 // Stage loader system
-// ---------------------------------------------------------------------------
-
-/// Loads the Stage 1 script into [`EnemySpawner`] when gameplay starts.
-///
-/// Registered as [`OnEnter`](`bevy::prelude::OnEnter`)(`AppState::Playing`).
-/// Resets the spawner and [`StageData`] so that restarting replays the full
-/// script from time zero without fast-forwarding or skipping boss logic.
-pub fn load_stage1_system(mut spawner: ResMut<EnemySpawner>, mut stage_data: ResMut<StageData>) {
-    spawner.script = stage1_script();
-    spawner.index = 0;
-    stage_data.elapsed_time = 0.0;
-    stage_data.boss_active = false;
-    stage_data.boss_defeated = false;
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
