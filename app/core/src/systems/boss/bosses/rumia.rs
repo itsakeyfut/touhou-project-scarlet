@@ -8,7 +8,6 @@ use crate::{
         enemy::Enemy,
     },
     events::BossSpawnEvent,
-    resources::StageData,
 };
 
 // ---------------------------------------------------------------------------
@@ -208,16 +207,12 @@ pub fn spawn_rumia(commands: &mut Commands) {
 pub fn on_boss_spawn_stage1(
     mut commands: Commands,
     mut boss_events: MessageReader<BossSpawnEvent>,
-    mut stage_data: ResMut<StageData>,
 ) {
     for event in boss_events.read() {
-        // Skip other stages and guard against duplicate messages in the same frame.
-        if event.stage_number != 1 || stage_data.boss_active {
+        if event.stage_number != 1 {
             continue;
         }
         spawn_rumia(&mut commands);
-        // Mark the boss as active so stage_control_system can track defeat.
-        stage_data.boss_active = true;
     }
 }
 

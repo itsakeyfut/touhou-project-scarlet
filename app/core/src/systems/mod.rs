@@ -12,3 +12,4 @@ pub mod player;
 pub mod reset;
 pub mod score;
 pub mod stage;
+pub mod stage_clear;
