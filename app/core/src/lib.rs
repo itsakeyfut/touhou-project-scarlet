@@ -105,13 +105,10 @@ impl Plugin for ScarletCorePlugin {
         // the stage loader runs so the spawner script is fresh when populated.
         app.add_systems(
             OnEnter(AppState::Playing),
-            systems::reset::reset_per_run_resources.before(stages::stage1::load_stage1_system),
+            systems::reset::reset_per_run_resources.before(stages::setup_stage),
         );
 
-        app.add_systems(
-            OnEnter(AppState::Playing),
-            stages::stage1::load_stage1_system,
-        );
+        app.add_systems(OnEnter(AppState::Playing), stages::setup_stage);
 
         // Player systems.
         app.add_systems(OnEnter(AppState::Playing), systems::player::spawn_player)
